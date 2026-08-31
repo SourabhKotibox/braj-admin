@@ -103,9 +103,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
         { href: "/languages", label: t('nav.languages'), icon: Languages, permission: "languages" },
         { href: "/genres", label: t('nav.genres'), icon: Tags, permission: "genres" },
         { href: "/movies", label: t('nav.movies'), icon: Film, permission: "movies" },
-        { href: "/audio", label: "Audio / Music", icon: Headphones, permission: "audio" },
-        { href: "/audio-albums", label: "Albums", icon: Disc3, permission: "audio" },
-        { href: "/audio-artists", label: "Artists", icon: Mic, permission: "audio" },
+        {
+          href: "/audio",
+          label: "Audio Songs",
+          icon: Headphones,
+          permission: "audio",
+          children: [
+            { href: "/audio", label: "Audio / Music", icon: Music, permission: "audio" },
+            { href: "/audio-albums", label: "Albums", icon: Disc3, permission: "audio" },
+            { href: "/audio-artists", label: "Artists", icon: Mic, permission: "audio" },
+          ],
+        },
         { href: "/video-music", label: "Video Music", icon: Music, permission: "videoMusic" },
         {
           href: "/tv-shows",
