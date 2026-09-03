@@ -7,7 +7,8 @@ import {
   usePublicLikeVideoMusic, usePublicShareVideoMusic, downloadFile,
   useGetPublicVideoMusicArtists, useGetPublicVideoMusicAlbums,
   useGetPublicVideoMusicByArtist, useGetPublicVideoMusicByAlbum,
-  useGetGenres, useGetCategoriesList, useGetLanguagesList
+  useGetGenres, useGetCategoriesList, useGetLanguagesList,
+  useGetPublicBanners
 } from "@/lib/api-client";
 import { PublicHeader, PublicFooter } from "./streaming-home";
 
@@ -57,10 +58,11 @@ export default function VideoMusicPage() {
     const [showQueue, setShowQueue] = useState(false);
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-    const [banners, setBanners] = useState<any[]>([]);
+    const { data: bannersRes } = useGetPublicBanners({ page: "videos", limit: "10" });
+    const banners = bannersRes?.data || [];
 
     const { data: allVideosData, isLoading: loadingAll } = useGetPublicVideoMusics({ 
-     status: "published", search, ...(selectedGenre && { genre: selectedGenre }),
+     search, ...(selectedGenre && { genre: selectedGenre }),
      ...(selectedCategory && { category: selectedCategory }),
      ...(selectedLanguage && { language: selectedLanguage })
    }, viewMode === "browse" || viewMode === "home");
@@ -73,31 +75,20 @@ export default function VideoMusicPage() {
    const { data: categoriesData } = useGetCategoriesList({ limit: 100 });
    const { data: languagesData } = useGetLanguagesList();
 
-   // Fetch banners for videos page
-   useEffect(() => {
-     const fetchBanners = async () => {
-       try {
-         const res = await fetch(`/api/public/banners?page=videos&limit=10`);
-         const data = await res.json();
-         if (data.success) {
-           setBanners(data.data);
-         }
-       } catch (err) {
-         console.error('Error fetching banners:', err);
-       }
-     };
-     fetchBanners();
-   }, []);
-
-  const allVideos: VideoTrack[] = allVideosData?.data || [];
+  const mapVideo = (v: any): VideoTrack => ({
+    ...v,
+    id: v.id || v._id,
+    videoUrl: v.videoUrl || v.videoQualities?.[0]?.url || v.hlsUrl || "",
+  });
+  const allVideos: VideoTrack[] = (allVideosData?.data || []).map(mapVideo);
   const artists: string[] = artistsData?.data || [];
   const albums: string[] = albumsData?.data || [];
   const genres = genresData?.data || [];
   const categories = categoriesData?.data || [];
   const languages = languagesData?.data || [];
   
-  const filteredVideos = viewMode === "artist" ? (artistVideos?.data || []) 
-    : viewMode === "album" ? (albumVideos?.data || []) 
+  const filteredVideos = viewMode === "artist" ? (artistVideos?.data || []).map(mapVideo)
+    : viewMode === "album" ? (albumVideos?.data || []).map(mapVideo)
     : allVideos.filter((v) => { 
         if (activeTab === "trending") return v.trending; 
         if (activeTab === "featured") return v.featured; 
@@ -115,11 +106,15 @@ export default function VideoMusicPage() {
   useEffect(() => { if (allVideos.length > 0 && !currentTrack) setQueue(allVideos); }, [allVideos]);
 
   const getVideoUrl = useCallback((track: VideoTrack) => {
+    let url = track.videoUrl;
     if (track.videoQualities?.length) {
       const high = track.videoQualities.find(q => q.quality === "720p" || q.quality === "1080p");
-      return high?.url || track.videoQualities[0]?.url || track.videoUrl;
+      url = high?.url || track.videoQualities[0]?.url || track.videoUrl || track.hlsUrl;
+    } else {
+      url = track.hlsUrl || track.videoUrl;
     }
-    return track.videoUrl;
+    if (url && url.startsWith("http")) return url;
+    return url ? getImageUrl(url) : "";
   }, []);
 
   useEffect(() => {

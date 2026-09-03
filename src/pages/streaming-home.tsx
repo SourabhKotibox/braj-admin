@@ -156,6 +156,54 @@ function SectionHeader({ title, icon, onSeeAll, count }: { title: string; icon?:
   );
 }
 
+function MusicRail({
+  title,
+  icon,
+  items,
+  onSeeAll,
+  kind,
+}: {
+  title: string;
+  icon?: React.ReactNode;
+  items: any[];
+  onSeeAll: () => void;
+  kind: "audio" | "video";
+}) {
+  const [, setLocation] = useLocation();
+  if (!items?.length) return null;
+  return (
+    <section>
+      <SectionHeader title={title} icon={icon} onSeeAll={onSeeAll} count={items.length} />
+      <div className="flex gap-4 overflow-x-auto px-4 sm:px-8 lg:px-12 pb-3" style={{ scrollbarWidth: "none" } as React.CSSProperties}>
+        {items.map((item: any) => (
+          <button
+            key={item.id || item._id}
+            onClick={() => setLocation(kind === "audio" ? "/music" : "/videos")}
+            className="group flex-shrink-0 w-[140px] sm:w-[160px] text-left"
+          >
+            <div className={`relative overflow-hidden bg-zinc-900 ${kind === "audio" ? "aspect-square rounded-xl" : "aspect-video rounded-lg"}`}>
+              {item.thumbnail || item.coverImage ? (
+                <img src={getImageUrl(item.thumbnail || item.coverImage)} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  {kind === "audio" ? <Headphones className="w-8 h-8 text-zinc-600" /> : <Video className="w-8 h-8 text-zinc-600" />}
+                </div>
+              )}
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <div className="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center">
+                  <Play className="w-4 h-4 text-white ml-0.5" />
+                </div>
+              </div>
+            </div>
+            <p className="mt-2 text-sm font-semibold text-white truncate">{item.title}</p>
+            <p className="text-xs text-white/60 truncate">{item.artist}</p>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 /* ─── FEATURED CARD wrapper (delegates to LandscapeCard) ─── */
 function FeaturedCard({ item, onPlay, size = "md" }: { item: ContentItem; onPlay: (item: ContentItem) => void; size?: "sm" | "md" | "lg" }) {
   return <LandscapeCard item={item} onClick={() => onPlay(item)} size={size} />;
@@ -892,6 +940,21 @@ function HomeTab({ onPlay, onSelectDrama, onSubscribeClick, isSubscribed }: {
           </div>
         </section>
       )}
+
+      <MusicRail
+        title="Music Audio"
+        icon={<Headphones className="w-4 h-4" />}
+        items={homeData.featuredAudio?.length ? homeData.featuredAudio : homeData.trendingAudio || []}
+        onSeeAll={() => setLocation("/music")}
+        kind="audio"
+      />
+      <MusicRail
+        title="Music Videos"
+        icon={<Video className="w-4 h-4" />}
+        items={homeData.featuredVideoMusic || []}
+        onSeeAll={() => setLocation("/videos")}
+        kind="video"
+      />
 
       {webSections.length > 0 ? (
         webSections.map((section: any, index: number) => {

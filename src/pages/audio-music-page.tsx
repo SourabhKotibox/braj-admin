@@ -7,7 +7,8 @@ import {
   usePublicLikeAudio, usePublicShareAudio, downloadFile,
   useGetPublicAudioArtists, useGetPublicAudioAlbums,
   useGetPublicAudioByArtist, useGetPublicAudioByAlbum,
-  useGetGenres, useGetCategoriesList, useGetLanguagesList
+  useGetGenres, useGetCategoriesList, useGetLanguagesList,
+  useGetPublicBanners
 } from "@/lib/api-client";
 import { PublicHeader, PublicFooter } from "./streaming-home";
 
@@ -56,10 +57,11 @@ export default function AudioMusicPage() {
    const [showQueue, setShowQueue] = useState(false);
    const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-   const [banners, setBanners] = useState<any[]>([]);
+   const { data: bannersRes } = useGetPublicBanners({ page: "music", limit: "10" });
+   const banners = bannersRes?.data || [];
 
    const { data: allAudiosData, isLoading: loadingAll } = useGetPublicAudios({ 
-     status: "published", search, ...(selectedGenre && { genre: selectedGenre }),
+     search, ...(selectedGenre && { genre: selectedGenre }),
      ...(selectedCategory && { category: selectedCategory }),
      ...(selectedLanguage && { language: selectedLanguage })
    }, viewMode === "browse" || viewMode === "home");
@@ -72,31 +74,24 @@ export default function AudioMusicPage() {
    const { data: categoriesData } = useGetCategoriesList({ limit: 100 });
    const { data: languagesData } = useGetLanguagesList();
 
-   // Fetch banners for music page
-   useEffect(() => {
-     const fetchBanners = async () => {
-       try {
-         const res = await fetch(`/api/public/banners?page=music&limit=10`);
-         const data = await res.json();
-         if (data.success) {
-           setBanners(data.data);
-         }
-       } catch (err) {
-         console.error('Error fetching banners:', err);
-       }
-     };
-     fetchBanners();
-   }, []);
-
-  const allAudios: AudioTrack[] = allAudiosData?.data || [];
+  const allAudios: AudioTrack[] = (allAudiosData?.data || []).map((a: any) => ({
+    ...a,
+    id: a.id || a._id,
+    audioUrl: a.audioUrl || a.audioQualities?.[0]?.url || "",
+  }));
   const artists: string[] = artistsData?.data || [];
   const albums: string[] = albumsData?.data || [];
   const genres = genresData?.data || [];
   const categories = categoriesData?.data || [];
   const languages = languagesData?.data || [];
   
-  const filteredAudios = viewMode === "artist" ? (artistAudios?.data || []) 
-    : viewMode === "album" ? (albumAudios?.data || []) 
+  const mapTrack = (a: any): AudioTrack => ({
+    ...a,
+    id: a.id || a._id,
+    audioUrl: a.audioUrl || a.audioQualities?.[0]?.url || "",
+  });
+  const filteredAudios = viewMode === "artist" ? (artistAudios?.data || []).map(mapTrack)
+    : viewMode === "album" ? (albumAudios?.data || []).map(mapTrack)
     : allAudios;
 
   const featuredAudios = allAudios.filter(a => a.featured);

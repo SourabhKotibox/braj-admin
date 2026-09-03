@@ -27,7 +27,7 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       "/api": {
-        target: "https://flipshorts.app",
+        target: process.env.VITE_API_URL || "http://localhost:3000",
         changeOrigin: true,
       },
     },
@@ -37,7 +37,7 @@ export default defineConfig({
     host: "0.0.0.0",
     proxy: {
       "/api": {
-        target: "https://flipshorts.app",
+        target: process.env.VITE_API_URL || "http://localhost:3000",
         changeOrigin: true,
       },
     },

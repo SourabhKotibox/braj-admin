@@ -4426,8 +4426,27 @@ export const useToggleVideoMusicTrending = () => {
 
 // ─── Public Audio (no auth) ────────────────────────────────────────────
 
+export const getPublicBanners = async (params?: Record<string, string>) => {
+  const query = new URLSearchParams();
+  if (params?.page) query.set('targetPage', params.page);
+  if (params?.targetPage) query.set('targetPage', params.targetPage);
+  if (params?.limit) query.set('limit', params.limit);
+  const search = query.toString() ? `?${query.toString()}` : '';
+  return api(`/public/banners${search}`, { skipAuth: true });
+};
+
+export const useGetPublicBanners = (params?: Record<string, string>, enabled = true) => {
+  return useQuery({
+    queryKey: ['public-banners', params],
+    queryFn: () => getPublicBanners(params),
+    enabled,
+  });
+};
+
 export const getPublicAudios = async (params?: Record<string, string>) => {
-  const search = params ? '?' + new URLSearchParams(params).toString() : '';
+  const cleaned: Record<string, string> = { limit: '50', ...(params || {}) };
+  Object.keys(cleaned).forEach((k) => { if (!cleaned[k]) delete cleaned[k]; });
+  const search = '?' + new URLSearchParams(cleaned).toString();
   return api(`/public/audio${search}`, { skipAuth: true });
 };
 
@@ -4478,7 +4497,9 @@ export const useGetPublicAudioByAlbum = (album: string, params?: Record<string, 
 // ─── Public Video Music (no auth) ──────────────────────────────────────
 
 export const getPublicVideoMusics = async (params?: Record<string, string>) => {
-  const search = params ? '?' + new URLSearchParams(params).toString() : '';
+  const cleaned: Record<string, string> = { limit: '50', ...(params || {}) };
+  Object.keys(cleaned).forEach((k) => { if (!cleaned[k]) delete cleaned[k]; });
+  const search = '?' + new URLSearchParams(cleaned).toString();
   return api(`/public/video-music${search}`, { skipAuth: true });
 };
 
@@ -4719,7 +4740,7 @@ export const deleteAudioAlbum = async (id: string) => {
 };
 
 export const bulkDeleteAudioAlbums = async (ids: string[]) => {
-  return api('/admin/audio-albums/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) });
+  return api('/audio-albums/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) });
 };
 
 // ─── React Query Hooks for Artists ─────────────────────────────────
