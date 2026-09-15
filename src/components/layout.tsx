@@ -51,6 +51,7 @@ import {
   Headphones,
   Disc3,
   Mic,
+  Trophy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -115,6 +116,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           ],
         },
         { href: "/video-music", label: "Video Music", icon: Music, permission: "videoMusic" },
+        { href: "/contests", label: "Contests", icon: Trophy, permission: "contests" },
         {
           href: "/tv-shows",
           label: "TV Shows",

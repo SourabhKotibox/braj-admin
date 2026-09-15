@@ -9,12 +9,12 @@ import {
   ChevronDown, User, Star, Plus, Info, Film, Tv,
   TrendingUp, Flame, Sparkles, Smartphone, Lock, Crown, Bell,
   Loader2, Clock, Check, EyeOff, AlertCircle, ListPlus, Send, Eye, Clapperboard, Bookmark,
-  Volume2, VolumeX, ExternalLink, SkipForward, Headphones, Video, Music,
+  Volume2, VolumeX, ExternalLink, SkipForward, Headphones, Video, Music, Trophy,
 } from "lucide-react";
 import {
   useGetWebHome, useGetWebBrowse, loginClient, registerClient, useGetPages,
   useGetGenres, useGetPublicNotifications, useGetWebSubscriptionPlans,
-  useGetWatchHistory, useGetSections, useGetWebAllContent,
+  useGetWatchHistory, useGetSections, useGetWebAllContent, useGetPublicContests,
 } from "@/lib/api-client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { WebsiteReviews } from "@/components/WebsiteReviews";
@@ -172,31 +172,118 @@ function MusicRail({
   const [, setLocation] = useLocation();
   if (!items?.length) return null;
   return (
-    <section>
+    <section className="mb-10">
       <SectionHeader title={title} icon={icon} onSeeAll={onSeeAll} count={items.length} />
+      <div className="flex gap-4 overflow-x-auto px-4 sm:px-8 lg:px-12 pb-3" style={{ scrollbarWidth: "none" } as React.CSSProperties}>
+        {items.map((item: any) => {
+          const isAudio = kind === "audio";
+          return (
+            <button
+              key={item.id || item._id}
+              onClick={() => setLocation(isAudio ? "/music" : "/videos")}
+              className={`group flex-shrink-0 ${isAudio ? "w-[150px] sm:w-[180px] md:w-[200px]" : "w-[240px] sm:w-[280px] md:w-[320px]"} text-left`}
+            >
+              <div
+                className={`relative overflow-hidden bg-zinc-900 ${isAudio ? "aspect-square rounded-xl" : "aspect-video rounded-xl"} group-hover:ring-2 group-hover:ring-red-500/40 transition-all duration-300`}
+              >
+                {item.thumbnail || item.coverImage ? (
+                  <img src={getImageUrl(item.thumbnail || item.coverImage)} alt={item.title} className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    {isAudio ? <Headphones className="w-10 h-10 text-zinc-600" /> : <Video className="w-10 h-10 text-zinc-600" />}
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
+                {item.featured && (
+                  <div className="absolute top-2 left-2 z-10">
+                    <span className="px-1.5 py-0.5 bg-red-600 text-white text-[9px] font-black rounded-md leading-none">FEATURED</span>
+                  </div>
+                )}
+                {item.trending && (
+                  <div className="absolute top-2 left-2 z-10">
+                    <span className="px-1.5 py-0.5 bg-orange-500 text-white text-[9px] font-black rounded-md leading-none">TRENDING</span>
+                  </div>
+                )}
+                <div className="absolute bottom-0 left-0 right-0 px-3 pb-2 pt-8 z-10 pointer-events-none">
+                  <p className="text-foreground font-bold text-xs truncate leading-tight">{item.title}</p>
+                  {item.artist && (
+                    <p className="text-foreground/80 text-[10px] mt-0.5 truncate">{item.artist}</p>
+                  )}
+                </div>
+                <button
+                  className="absolute bottom-2 right-2 z-20 w-9 h-9 rounded-full bg-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 transition-all duration-200 shadow-lg pointer-events-auto"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setLocation(isAudio ? "/music" : "/videos");
+                  }}
+                  aria-label="Play"
+                >
+                  <Play className="w-4 h-4 text-foreground fill-white ml-0.5" />
+                </button>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ContestRail({ title, items, onSeeAll }: {
+  title: string;
+  items: any[];
+  onSeeAll: () => void;
+}) {
+  const [, setLocation] = useLocation();
+  if (!items?.length) return null;
+  return (
+    <section className="mb-10">
+      <SectionHeader title={title} icon={<Trophy className="w-4 h-4" />} onSeeAll={onSeeAll} count={items.length} />
       <div className="flex gap-4 overflow-x-auto px-4 sm:px-8 lg:px-12 pb-3" style={{ scrollbarWidth: "none" } as React.CSSProperties}>
         {items.map((item: any) => (
           <button
             key={item.id || item._id}
-            onClick={() => setLocation(kind === "audio" ? "/music" : "/videos")}
-            className="group flex-shrink-0 w-[140px] sm:w-[160px] text-left"
+            onClick={() => setLocation(`/contest/${item.id}`)}
+            className="group flex-shrink-0 w-[220px] sm:w-[260px] md:w-[300px] text-left"
           >
-            <div className={`relative overflow-hidden bg-zinc-900 ${kind === "audio" ? "aspect-square rounded-xl" : "aspect-video rounded-lg"}`}>
+            <div className="relative overflow-hidden bg-zinc-900 aspect-video rounded-xl group-hover:ring-2 group-hover:ring-red-500/40 transition-all duration-300">
               {item.thumbnail || item.coverImage ? (
-                <img src={getImageUrl(item.thumbnail || item.coverImage)} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                <img src={getImageUrl(item.thumbnail || item.coverImage)} alt={item.title} className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
-                  {kind === "audio" ? <Headphones className="w-8 h-8 text-zinc-600" /> : <Video className="w-8 h-8 text-zinc-600" />}
+                  <Trophy className="w-10 h-10 text-zinc-600" />
                 </div>
               )}
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <div className="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center">
-                  <Play className="w-4 h-4 text-white ml-0.5" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
+              {item.featured && (
+                <div className="absolute top-2 left-2 z-10">
+                  <span className="px-1.5 py-0.5 bg-red-600 text-white text-[9px] font-black rounded-md leading-none">FEATURED</span>
                 </div>
+              )}
+              {item.trending && (
+                <div className="absolute top-2 left-2 z-10">
+                  <span className="px-1.5 py-0.5 bg-orange-500 text-white text-[9px] font-black rounded-md leading-none">TRENDING</span>
+                </div>
+              )}
+              <div className="absolute bottom-0 left-0 right-0 px-3 pb-2 pt-8 z-10 pointer-events-none">
+                <p className="text-foreground font-bold text-xs truncate leading-tight">{item.title}</p>
+                {item.price > 0 ? (
+                  <p className="text-foreground/80 text-[10px] mt-0.5 truncate">Entry Fee: ₹{item.price}</p>
+                ) : (
+                  <p className="text-emerald-400 text-[10px] mt-0.5 truncate">Free Entry</p>
+                )}
               </div>
+              <button
+                className="absolute bottom-2 right-2 z-20 w-9 h-9 rounded-full bg-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 transition-all duration-200 shadow-lg pointer-events-auto"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLocation(`/contest/${item.id}`);
+                }}
+                aria-label="View Contest"
+              >
+                <Play className="w-4 h-4 text-foreground fill-white ml-0.5" />
+              </button>
             </div>
-            <p className="mt-2 text-sm font-semibold text-white truncate">{item.title}</p>
-            <p className="text-xs text-white/60 truncate">{item.artist}</p>
           </button>
         ))}
       </div>
@@ -824,17 +911,17 @@ function ShortDramaTab({ onSelect }: { onSelect: (d: ShortDrama) => void }) {
   );
 }
 
-function getSectionItems(section: any, movies: any[], dramas: any[], homeData: any) {
+function getSectionItems(section: any, movies: any[], dramas: any[], contests: any[], homeData: any) {
   if (section.content && section.content.length > 0) return section.content;
   if (section.category && homeData && homeData[section.category] && homeData[section.category].length > 0) return homeData[section.category];
   
-  let sourceItems = section.contentType === 'movie' ? movies : section.contentType === 'drama' ? dramas : [...movies, ...dramas];
+  let sourceItems = section.contentType === 'movie' ? movies : section.contentType === 'contest' ? contests : section.contentType === 'drama' ? dramas : [...movies, ...dramas];
   
   let filteredItems = [...sourceItems];
   if (section.contentSelection === 'dynamic' || section.contentSelection === 'mixed') {
     if (section.filterKey && section.filterKey !== 'none') {
        const fKey = section.filterKey;
-       const fVal = section.filter?.[fKey] || section.filterValue; // Fallback to raw filterValue if filter obj is missing
+       const fVal = section.filter?.[fKey] || section.filterValue;
        if (fKey === 'genres') {
           filteredItems = filteredItems.filter(i => i.genres?.includes(fVal));
        } else if (fKey === 'isNewContent' || fKey === 'trending' || fKey === 'featured') {
@@ -849,7 +936,6 @@ function getSectionItems(section: any, movies: any[], dramas: any[], homeData: a
     filteredItems = sourceItems.filter(item => section.manualContentIds?.includes(item._id));
   } else if (section.contentSelection === 'mixed') {
     const manualItems = sourceItems.filter(item => section.manualContentIds?.includes(item._id));
-    // Combine manual items with filtered items, avoiding duplicates
     const manualIds = new Set(manualItems.map(i => i._id));
     filteredItems = [...manualItems, ...filteredItems.filter(i => !manualIds.has(i._id))];
   }
@@ -888,6 +974,7 @@ function HomeTab({ onPlay, onSelectDrama, onSubscribeClick, isSubscribed }: {
   const webSections = (sectionsData?.data || []).sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
   const movies = allContentRes?.movies || [];
   const dramas = allContentRes?.dramas || [];
+  const contests = homeData?.contests || [];
 
   if (isHomeLoading || isSectionsLoading || isAllContentLoading || !homeData) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-red-600" /></div>;
 
@@ -955,6 +1042,11 @@ function HomeTab({ onPlay, onSelectDrama, onSubscribeClick, isSubscribed }: {
         onSeeAll={() => setLocation("/videos")}
         kind="video"
       />
+      <ContestRail
+        title="Contests"
+        items={contests}
+        onSeeAll={() => setLocation("/contests")}
+      />
 
       {webSections.length > 0 ? (
         webSections.map((section: any, index: number) => {
@@ -967,7 +1059,7 @@ function HomeTab({ onPlay, onSelectDrama, onSubscribeClick, isSubscribed }: {
           }
 
           let rowContent = null;
-          const items = getSectionItems(section, movies, dramas, homeData);
+          const items = getSectionItems(section, movies, dramas, contests, homeData);
           
           if (items.length === 0) return null;
 
@@ -978,7 +1070,22 @@ function HomeTab({ onPlay, onSelectDrama, onSubscribeClick, isSubscribed }: {
                 <div className="px-4 sm:px-8 lg:px-12 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 pt-2">
                   {items.map((item: any) => (
                     <Fragment key={item.id || item._id}>
-                      {section.itemType === 'landscape' ? (
+                      {section.itemType === 'contest' ? (
+                        <button onClick={() => setLocation(`/contest/${item.id}`)} className="group text-left">
+                          <div className="relative rounded-xl overflow-hidden bg-zinc-900 aspect-video group-hover:ring-2 group-hover:ring-red-500/40 transition-all duration-300">
+                            {item.thumbnail || item.coverImage ? (
+                              <img src={getImageUrl(item.thumbnail || item.coverImage)} alt={item.title} className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center"><Trophy className="w-8 h-8 text-zinc-600" /></div>
+                            )}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
+                            <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5 pt-6 z-10 pointer-events-none">
+                              <p className="text-foreground font-bold text-xs truncate leading-tight">{item.title}</p>
+                              {item.price > 0 ? <p className="text-foreground/80 text-[10px] mt-0.5">₹{item.price}</p> : <p className="text-emerald-400 text-[10px] mt-0.5">Free Entry</p>}
+                            </div>
+                          </div>
+                        </button>
+                      ) : section.itemType === 'landscape' ? (
                         <LandscapeCard item={item} onClick={() => onPlay(item)} fullWidth />
                       ) : section.itemType === 'drama' ? (
                         <ShortDramaCard drama={item} onClick={() => onSelectDrama(item)} fullWidth />
@@ -991,7 +1098,34 @@ function HomeTab({ onPlay, onSelectDrama, onSubscribeClick, isSubscribed }: {
               </div>
             );
           } else {
-            if (section.itemType === 'landscape') {
+            if (section.itemType === 'contest') {
+              rowContent = (
+                <section className="mb-10">
+                  <SectionHeader title={section.title} onSeeAll={() => setLocation(`/browse?section=${section._id}`)} count={items.length} />
+                  <div className="flex gap-4 overflow-x-auto px-4 sm:px-8 lg:px-12 pb-3" style={{ scrollbarWidth: "none" } as React.CSSProperties}>
+                    {items.map((item: any) => (
+                      <button key={item.id || item._id} onClick={() => setLocation(`/contest/${item.id}`)} className="group flex-shrink-0 w-[220px] sm:w-[260px] md:w-[300px] text-left">
+                        <div className="relative overflow-hidden bg-zinc-900 aspect-video rounded-xl group-hover:ring-2 group-hover:ring-red-500/40 transition-all duration-300">
+                          {item.thumbnail || item.coverImage ? (
+                            <img src={getImageUrl(item.thumbnail || item.coverImage)} alt={item.title} className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center"><Trophy className="w-10 h-10 text-zinc-600" /></div>
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
+                          <div className="absolute bottom-0 left-0 right-0 px-3 pb-2 pt-8 z-10 pointer-events-none">
+                            <p className="text-foreground font-bold text-xs truncate leading-tight">{item.title}</p>
+                            {item.price > 0 ? <p className="text-foreground/80 text-[10px] mt-0.5">Entry Fee: ₹{item.price}</p> : <p className="text-emerald-400 text-[10px] mt-0.5">Free Entry</p>}
+                          </div>
+                          <button className="absolute bottom-2 right-2 z-20 w-9 h-9 rounded-full bg-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 transition-all duration-200 shadow-lg pointer-events-auto" onClick={(e) => { e.stopPropagation(); setLocation(`/contest/${item.id}`); }} aria-label="View Contest">
+                            <Play className="w-4 h-4 text-foreground fill-white ml-0.5" />
+                          </button>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              );
+            } else if (section.itemType === 'landscape') {
               rowContent = <FeaturedRow title={section.title} items={items} onPlay={onPlay} onSeeAll={() => setLocation(`/browse?section=${section._id}`)} />;
             } else if (section.itemType === 'drama') {
               rowContent = <ShortDramaRow title={section.title} items={items} onSelect={onSelectDrama} onSeeAll={() => setLocation(`/browse?section=${section._id}`)} />;

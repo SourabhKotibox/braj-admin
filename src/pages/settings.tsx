@@ -18,6 +18,8 @@ import {
   Eye,
   EyeOff,
   Crown,
+  Globe,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,7 +45,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useDeleteAccount, useUpdateSettings, useUploadSettingsLogos, useGetEmailStatus, useTestEmail, getImageUrl } from "@/lib/api-client";
+import { useDeleteAccount, useUpdateSettings, useUploadSettingsLogos, useGetEmailStatus, useTestEmail, getImageUrl, getStorageStatus } from "@/lib/api-client";
 import { useSettings, applyColorTheme, applyBodyClasses } from "@/contexts/SettingsContext";
 import { useTheme } from "next-themes";
 import MediaPicker from "@/components/MediaPicker";
@@ -549,38 +551,71 @@ export default function Settings() {
     }
   };
 
-  // ── Storage Settings ───────────────────────────────────────────────────
-   const [storage, setStorage] = useState({
-     localStorage: ctxSettings.storageDriver === 'local',
-   });
+  // ── Storage Settings ───────────────────────────────────────────
+  const [storage, setStorage] = useState({
+    storageDriver: ctxSettings.storageDriver || 'local',
+    doSpacesEnabled: ctxSettings.doSpacesEnabled || false,
+    doSpacesAccessKey: ctxSettings.doSpacesAccessKey || '',
+    doSpacesSecretKey: ctxSettings.doSpacesSecretKey || '',
+    doSpacesRegion: ctxSettings.doSpacesRegion || '',
+    doSpacesBucket: ctxSettings.doSpacesBucket || '',
+    doSpacesCdnUrl: ctxSettings.doSpacesCdnUrl || '',
+    doSpacesPathStyleEndpoint: ctxSettings.doSpacesPathStyleEndpoint ?? false,
+    doSpacesBrowserDirectUpload: ctxSettings.doSpacesBrowserDirectUpload ?? true,
+  });
 
-   useEffect(() => {
-     setStorage({
-       localStorage: ctxSettings.storageDriver === 'local',
-     });
-   }, [
-     ctxSettings.storageDriver,
-   ]);
-
-   const handleSaveStorage = async () => {
-     setSaving(true);
-     try {
-      const driver: 'local' | 'bunny' = storage.localStorage ? 'local' : 'bunny';
-
-      await updateSettingsMutation.mutateAsync({
-        storageDriver: driver,
-      });
+  const handleSaveStorage = async () => {
+    setSaving(true);
+    try {
+      const usingSpaces = storage.doSpacesEnabled || storage.storageDriver === 'spaces';
+      const payload: Record<string, any> = {
+        storageDriver: usingSpaces ? 'spaces' : 'local',
+        doSpacesEnabled: usingSpaces,
+        doSpacesAccessKey: storage.doSpacesAccessKey,
+        doSpacesSecretKey: storage.doSpacesSecretKey,
+        doSpacesRegion: storage.doSpacesRegion,
+        doSpacesBucket: storage.doSpacesBucket,
+        doSpacesCdnUrl: storage.doSpacesCdnUrl,
+        doSpacesPathStyleEndpoint: false,
+        doSpacesBrowserDirectUpload: true,
+      };
+      const saved = await updateSettingsMutation.mutateAsync(payload);
       updateCtx({
-        storageDriver: driver,
+        storageDriver: payload.storageDriver,
+        doSpacesEnabled: payload.doSpacesEnabled,
+        doSpacesAccessKey: storage.doSpacesAccessKey,
+        doSpacesSecretKey: storage.doSpacesSecretKey,
+        doSpacesRegion: storage.doSpacesRegion,
+        doSpacesBucket: storage.doSpacesBucket,
+        doSpacesCdnUrl: storage.doSpacesCdnUrl,
+        doSpacesPathStyleEndpoint: false,
+        doSpacesBrowserDirectUpload: true,
       });
+      setStorage((prev) => ({
+        ...prev,
+        storageDriver: payload.storageDriver,
+        doSpacesEnabled: payload.doSpacesEnabled,
+        doSpacesPathStyleEndpoint: false,
+        doSpacesBrowserDirectUpload: true,
+      }));
       await refreshSettings();
-      toast({ title: "Storage settings saved!" });
+      const status = saved?.storage || (await getStorageStatus())?.data;
+      if (status?.ok) {
+        toast({ title: "DigitalOcean Spaces is live", description: `Uploads go to ${status.bucket}` });
+      } else {
+        toast({
+          title: "Storage saved, but Spaces is not live",
+          description: status?.error || "Check access key, secret, region, and bucket.",
+          variant: "destructive",
+        });
+      }
     } catch (err: any) {
       toast({ title: err?.message || "Save failed", variant: "destructive" });
     } finally {
       setSaving(false);
     }
-   };
+  };
+
 
   // ── SEO Settings ───────────────────────────────────────────────────────
   const [seo, setSeo] = useState({
@@ -1376,36 +1411,131 @@ export default function Settings() {
   const renderStorage = () => (
     <div>
       <SectionTitle icon={HardDrive} label="Storage Settings" />
-      <div className="space-y-0 mb-6 rounded-lg border border-border overflow-hidden">
-        {(
-          [
-            { key: "localStorage", label: "Local Storage" },
-          ] as const
-        ).map(({ key, label }, i, arr) => (
-          <div
-            key={key}
-            className={`flex items-center justify-between px-5 py-4 bg-card ${
-              i < arr.length - 1 ? "border-b border-border" : ""
-            }`}
-          >
-            <span className="text-foreground font-medium">{label}</span>
-            <Switch
-              checked={storage[key]}
-              onCheckedChange={(v) => {
-                setStorage({
-                  ...storage,
-                  localStorage: key === "localStorage" ? v : false,
-                });
-              }}
-              className="data-[state=checked]:bg-primary"
-            />
+      <div className="space-y-4">
+        {/* DigitalOcean Spaces Toggle */}
+        <div className="flex items-center justify-between px-5 py-4 bg-card rounded-lg border border-border">
+          <div className="flex items-center gap-3">
+            <Globe className="h-5 w-5 text-primary" />
+            <div>
+              <span className="text-foreground font-medium">DigitalOcean Spaces</span>
+              <p className="text-xs text-muted-foreground">S3-compatible object storage</p>
+            </div>
           </div>
-        ))}
+          <Switch
+            checked={storage.doSpacesEnabled}
+            onCheckedChange={(v) => setStorage({
+              ...storage,
+              doSpacesEnabled: v,
+              storageDriver: v ? 'spaces' : 'local',
+              doSpacesPathStyleEndpoint: false,
+              doSpacesBrowserDirectUpload: v ? true : storage.doSpacesBrowserDirectUpload,
+            })}
+            className="data-[state-checked]:bg-primary data-[state=checked]:bg-primary"
+          />
+        </div>
+
+        {/* DO Spaces Form */}
+        {storage.doSpacesEnabled && (
+          <div className="space-y-4 ml-2 border border-border rounded-lg p-5 bg-card">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="space-y-2">
+                <Label className={labelCls}>Access Key <span className="text-primary">*</span></Label>
+                <SecretInput
+                  value={storage.doSpacesAccessKey}
+                  onChange={(e) => setStorage({ ...storage, doSpacesAccessKey: e.target.value })}
+                  placeholder="DO00W72CEZKGQG2ZNPYA"
+                  className={inputCls}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className={labelCls}>Secret Key <span className="text-primary">*</span></Label>
+                <SecretInput
+                  value={storage.doSpacesSecretKey}
+                  onChange={(e) => setStorage({ ...storage, doSpacesSecretKey: e.target.value })}
+                  placeholder="•••••••••••••••••••••••••••••••••••••••••"
+                  className={inputCls}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className={labelCls}>Region <span className="text-primary">*</span></Label>
+                <Input
+                  value={storage.doSpacesRegion}
+                  onChange={(e) => setStorage({ ...storage, doSpacesRegion: e.target.value })}
+                  placeholder="nyc3"
+                  className={inputCls}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className={labelCls}>Bucket Name <span className="text-primary">*</span></Label>
+                <Input
+                  value={storage.doSpacesBucket}
+                  onChange={(e) => setStorage({ ...storage, doSpacesBucket: e.target.value })}
+                  placeholder="manch24"
+                  className={inputCls}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className={labelCls}>CDN URL (optional)</Label>
+                <Input
+                  value={storage.doSpacesCdnUrl}
+                  onChange={(e) => setStorage({ ...storage, doSpacesCdnUrl: e.target.value })}
+                  placeholder="https://manch24.nyc3.cdn.digitaloceanspaces.com"
+                  className={inputCls}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className={labelCls}>Storage Driver</Label>
+                <Select
+                  value={storage.storageDriver}
+                  onValueChange={(v) => setStorage({
+                    ...storage,
+                    storageDriver: v,
+                    doSpacesEnabled: v === 'spaces',
+                  })}
+                >
+                  <SelectTrigger className={inputCls}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                  <SelectItem value="local">Local (not for live)</SelectItem>
+                  <SelectItem value="spaces">DigitalOcean Spaces (live)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between px-4 py-3 bg-muted/50 rounded-lg border border-border">
+              <div className="flex items-center gap-2">
+                <Lock className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm text-foreground">Path Style Endpoint</span>
+              </div>
+              <Switch
+                checked={storage.doSpacesPathStyleEndpoint}
+                onCheckedChange={(v) => setStorage({ ...storage, doSpacesPathStyleEndpoint: v })}
+                className="data-[state=checked]:bg-primary"
+              />
+            </div>
+
+            <div className="flex items-center justify-between px-4 py-3 bg-muted/50 rounded-lg border border-border">
+              <div className="flex items-center gap-2">
+                <Upload className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <span className="text-sm text-foreground">Enable Browser Direct Uploads</span>
+                  <p className="text-xs text-muted-foreground">Required so large movies upload from the admin browser straight to DigitalOcean Spaces. Secrets stay on the server.</p>
+                </div>
+              </div>
+              <Switch
+                checked={storage.doSpacesBrowserDirectUpload}
+                onCheckedChange={(v) => setStorage({ ...storage, doSpacesBrowserDirectUpload: v })}
+                className="data-[state=checked]:bg-primary"
+              />
+            </div>
+          </div>
+        )}
       </div>
       <SaveBtn saving={saving} onClick={handleSaveStorage} />
     </div>
   );
-
   const renderSeo = () => (
     <div>
       <SectionTitle icon={Search} label="SEO Settings" />

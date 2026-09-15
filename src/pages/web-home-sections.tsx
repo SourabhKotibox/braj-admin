@@ -31,6 +31,7 @@ import {
   useGetMovies,
   useGetContentList,
   useGetPublicAds,
+  useGetPublicContests,
 } from '@/lib/api-client';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -157,6 +158,7 @@ export default function WebHomeSections() {
   const { data: moviesRes } = useGetMovies({ limit: 500 });
   const { data: dramasRes } = useGetContentList({ limit: 500 });
   const { data: adsRes } = useGetPublicAds({ placement: 'Home Page' });
+  const { data: contestsRes } = useGetPublicContests({ limit: 500 });
 
   const [localSections, setLocalSections] = useState<any[]>([]);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
@@ -448,13 +450,14 @@ export default function WebHomeSections() {
                         <SelectItem value="home-banner">Home Banner Ad</SelectItem>
                         <SelectItem value="google-adsense">Google Adsense Banner</SelectItem>
                       </>
-                    ) : (
-                      <>
-                        <SelectItem value="landscape">Landscape (16:9)</SelectItem>
-                        <SelectItem value="portrait">Portrait (2:3)</SelectItem>
-                        <SelectItem value="drama">Short Drama (9:16)</SelectItem>
-                      </>
-                    )}
+                     ) : (
+                       <>
+                         <SelectItem value="landscape">Landscape (16:9)</SelectItem>
+                         <SelectItem value="portrait">Portrait (2:3)</SelectItem>
+                         <SelectItem value="drama">Short Drama (9:16)</SelectItem>
+                         <SelectItem value="contest">Contest</SelectItem>
+                       </>
+                     )}
                   </SelectContent>
                 </Select>
               </div>
@@ -589,36 +592,40 @@ export default function WebHomeSections() {
                     <SelectTrigger className="bg-muted border-border">
                       <SelectValue placeholder="Click to add a title..." />
                     </SelectTrigger>
-                    <SelectContent>
-                      {moviesRes?.data?.map((item: any) => (
-                        <SelectItem key={item._id} value={item._id}>[Movie] {item.title}</SelectItem>
-                      ))}
-                      {dramasRes?.data?.map((item: any) => (
-                        <SelectItem key={item._id} value={item._id}>[Drama] {item.title}</SelectItem>
-                      ))}
-                    </SelectContent>
+                     <SelectContent>
+                       {moviesRes?.data?.map((item: any) => (
+                         <SelectItem key={item._id} value={item._id}>[Movie] {item.title}</SelectItem>
+                       ))}
+                       {dramasRes?.data?.map((item: any) => (
+                         <SelectItem key={item._id} value={item._id}>[Drama] {item.title}</SelectItem>
+                       ))}
+                       {contestsRes?.data?.map((item: any) => (
+                         <SelectItem key={item._id} value={item._id}>[Contest] {item.title}</SelectItem>
+                       ))}
+                     </SelectContent>
                   </Select>
 
                   {selectedItems.length > 0 && (
                     <div className="flex flex-col gap-2 mt-3 bg-muted/30 dark:bg-black/20 border border-border dark:border-white/5 p-2 rounded-md max-h-48 overflow-y-auto">
-                      {selectedItems.map(id => {
-                        const matchedMovie = moviesRes?.data?.find((i: any) => i._id === id);
-                        const matchedDrama = dramasRes?.data?.find((i: any) => i._id === id);
-                        const matchedItem = matchedMovie || matchedDrama;
-                        return (
-                          <div key={id} className="flex items-center justify-between bg-muted/50 px-3 py-2 rounded-md text-sm border border-border/50">
-                            <span className="truncate pr-4">{matchedItem ? (matchedMovie ? '[Movie] ' : '[Drama] ') + matchedItem.title : 'Unknown Title'}</span>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-6 w-6 rounded-md hover:bg-red-500/20 hover:text-red-500 text-white/75"
-                              onClick={() => setSelectedItems(selectedItems.filter(i => i !== id))}
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        )
-                      })}
+                   {selectedItems.map(id => {
+                     const matchedMovie = moviesRes?.data?.find((i: any) => i._id === id);
+                     const matchedDrama = dramasRes?.data?.find((i: any) => i._id === id);
+                     const matchedContest = contestsRes?.data?.find((i: any) => i._id === id);
+                     const matchedItem = matchedMovie || matchedDrama || matchedContest;
+                     return (
+                       <div key={id} className="flex items-center justify-between bg-muted/50 px-3 py-2 rounded-md text-sm border border-border/50">
+                         <span className="truncate pr-4">{matchedItem ? (matchedMovie ? '[Movie] ' : matchedDrama ? '[Drama] ' : matchedContest ? '[Contest] ' : '') + matchedItem.title : 'Unknown Title'}</span>
+                         <Button 
+                           variant="ghost" 
+                           size="icon" 
+                           className="h-6 w-6 rounded-md hover:bg-red-500/20 hover:text-red-500 text-white/75"
+                           onClick={() => setSelectedItems(selectedItems.filter(i => i !== id))}
+                         >
+                           <Trash2 className="w-3 h-3" />
+                         </Button>
+                       </div>
+                     )
+                   })}
                     </div>
                   )}
                 </div>

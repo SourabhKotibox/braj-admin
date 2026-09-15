@@ -90,10 +90,18 @@ export interface AppSettings {
   currencyPosition: 'before' | 'after';
   decimalPlaces: number;
   // Storage
-  storageDriver: 'local' | 'bunny';
+  storageDriver: 'local' | 'bunny' | 'spaces';
   bunnyStorageZone: string;
   bunnyAccessKey: string;
   bunnyCdnUrl: string;
+  doSpacesEnabled: boolean;
+  doSpacesAccessKey: string;
+  doSpacesSecretKey: string;
+  doSpacesRegion: string;
+  doSpacesBucket: string;
+  doSpacesCdnUrl: string;
+  doSpacesPathStyleEndpoint: boolean;
+  doSpacesBrowserDirectUpload: boolean;
   // SEO
   metaTitle: string;
   metaDescription: string;
@@ -209,8 +217,16 @@ const DEFAULT: AppSettings = {
   // Storage
    storageDriver: 'local',
    bunnyStorageZone: "",
-  bunnyAccessKey: "",
-  bunnyCdnUrl: "",
+   bunnyAccessKey: "",
+   bunnyCdnUrl: "",
+   doSpacesEnabled: false,
+   doSpacesAccessKey: "",
+   doSpacesSecretKey: "",
+   doSpacesRegion: "",
+   doSpacesBucket: "",
+   doSpacesCdnUrl: "",
+   doSpacesPathStyleEndpoint: false,
+   doSpacesBrowserDirectUpload: true,
   // SEO
   metaTitle: "",
   metaDescription: "",
@@ -330,8 +346,16 @@ function mapApiData(api: any): AppSettings {
     // Storage
      storageDriver: api.storageDriver || DEFAULT.storageDriver,
      bunnyStorageZone: api.bunnyStorageZone || "",
-    bunnyAccessKey: api.bunnyAccessKey || "",
-    bunnyCdnUrl: api.bunnyCdnUrl || "",
+     bunnyAccessKey: api.bunnyAccessKey || "",
+     bunnyCdnUrl: api.bunnyCdnUrl || "",
+     doSpacesEnabled: api.doSpacesEnabled ?? DEFAULT.doSpacesEnabled,
+     doSpacesAccessKey: api.doSpacesAccessKey || "",
+     doSpacesSecretKey: api.doSpacesSecretKey || "",
+     doSpacesRegion: api.doSpacesRegion || "",
+     doSpacesBucket: api.doSpacesBucket || "",
+     doSpacesCdnUrl: api.doSpacesCdnUrl || "",
+     doSpacesPathStyleEndpoint: api.doSpacesPathStyleEndpoint ?? DEFAULT.doSpacesPathStyleEndpoint,
+     doSpacesBrowserDirectUpload: api.doSpacesBrowserDirectUpload ?? DEFAULT.doSpacesBrowserDirectUpload,
     // SEO
     metaTitle: api.metaTitle || "",
     metaDescription: api.metaDescription || "",

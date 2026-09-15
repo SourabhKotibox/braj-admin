@@ -168,6 +168,11 @@ import AudioAlbumsListPage from "@/pages/audio-albums-list";
 import AudioAlbumFormPage from "@/pages/audio-album-form";
 import VideoMusicListPage from "@/pages/video-music-list";
 import VideoMusicFormPage from "@/pages/video-music-form";
+import ContestsListPage from "@/pages/contests-list";
+import ContestFormPage from "@/pages/contest-form";
+import ContestPublicPage from "@/pages/contest-public";
+import ContestVotesPage from "@/pages/contest-votes";
+import ContestsPage from "@/pages/contests-browse";
 import TvShowsPage from "@/pages/tv-shows";
 import TvShowForm from "@/pages/tv-show-form";
 import SeasonsPage from "@/pages/seasons";
@@ -258,6 +263,7 @@ const routePermissions: Record<string, string | null> = {
   "/coin-packages": "subscriptionPlans",
   "/rewards-management": "subscriptionPlans",
   "/revenue-analytics": "subscriptionPlans",
+  "/contests": "contests",
 };
 
 const hasPermissionForRoute = (path: string, user: any): boolean => {
@@ -361,6 +367,10 @@ function AdminRoutes() {
         <Route path="/video-music/new" component={VideoMusicFormPage} />
         <Route path="/video-music/:id" component={VideoMusicFormPage} />
         <Route path="/video-music" component={VideoMusicListPage} />
+        <Route path="/contests/new" component={ContestFormPage} />
+        <Route path="/contests/:id" component={ContestFormPage} />
+        <Route path="/contests/:id/votes" component={ContestVotesPage} />
+        <Route path="/contests" component={ContestsListPage} />
         <Route path="/tv-shows/new" component={TvShowForm} />
               <Route path="/tv-shows/:id/edit" component={TvShowForm} />
               <Route path="/tv-shows" component={TvShowsPage} />
@@ -476,6 +486,8 @@ function Router() {
       <Route path="/video-music-browse" component={VideoMusicBrowsePage} />
       <Route path="/music" component={AudioMusicPage} />
       <Route path="/videos" component={VideoMusicPage} />
+      <Route path="/contests" component={ContestsPage} />
+      <Route path="/contest/:id" component={ContestPublicPage} />
       
       {/* Admin catch-all route (must be at the end) */}
       <Route>

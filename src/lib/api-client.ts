@@ -1778,6 +1778,10 @@ export const getEmailStatus = async () => {
   return api("/settings/email-status");
 };
 
+export const getStorageStatus = async () => {
+  return api("/settings/storage-status");
+};
+
 export const testEmail = async (to: string) => {
   return api("/settings/test-email", {
     method: "POST",
@@ -4422,6 +4426,170 @@ export const useToggleVideoMusicFeatured = () => {
 export const useToggleVideoMusicTrending = () => {
   const qc = useQueryClient();
   return useMutation({ mutationFn: toggleVideoMusicTrending, onSuccess: () => qc.invalidateQueries({ queryKey: ['videoMusics'] }) });
+};
+
+// ─── Contests ────────────────────────────────────────────────────────────
+
+export const getAllContestVideos = async (params?: Record<string, string>) => {
+  const search = params ? '?' + new URLSearchParams(params).toString() : '';
+  return api(`/contests${search}`);
+};
+
+export const getContestVideoById = async (id: string) => api(`/contests/${id}`);
+
+export const createContestVideo = async (data: Record<string, any>) => {
+  return api('/contests', { method: 'POST', body: JSON.stringify(data) });
+};
+
+export const updateContestVideo = async (id: string, data: Record<string, any>) => {
+  return api(`/contests/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+};
+
+export const deleteContestVideo = async (id: string) => {
+  return api(`/contests/${id}`, { method: 'DELETE' });
+};
+
+export const toggleContestVideoFeatured = async (id: string) => {
+  return api(`/contests/${id}/featured`, { method: 'PATCH' });
+};
+
+export const toggleContestVideoTrending = async (id: string) => {
+  return api(`/contests/${id}/trending`, { method: 'PATCH' });
+};
+
+export const useGetAllContestVideos = (params?: Record<string, string>) => {
+  return useQuery({ queryKey: ['contestVideos', params], queryFn: () => getAllContestVideos(params) });
+};
+
+export const useGetContestVideoById = (id: string) => {
+  return useQuery({ queryKey: ['contestVideo', id], queryFn: () => getContestVideoById(id), enabled: !!id });
+};
+
+export const useCreateContestVideo = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: createContestVideo, onSuccess: () => qc.invalidateQueries({ queryKey: ['contestVideos'] }) });
+};
+
+export const useUpdateContestVideo = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: ({ id, data }: { id: string; data: any }) => updateContestVideo(id, data), onSuccess: () => qc.invalidateQueries({ queryKey: ['contestVideos'] }) });
+};
+
+export const useDeleteContestVideo = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: deleteContestVideo, onSuccess: () => qc.invalidateQueries({ queryKey: ['contestVideos'] }) });
+};
+
+export const useToggleContestVideoFeatured = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: toggleContestVideoFeatured, onSuccess: () => qc.invalidateQueries({ queryKey: ['contestVideos'] }) });
+};
+
+export const useToggleContestVideoTrending = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: toggleContestVideoTrending, onSuccess: () => qc.invalidateQueries({ queryKey: ['contestVideos'] }) });
+};
+
+// ─── Contestants ─────────────────────────────────────────────────────────
+
+export const getAllContestants = async (params?: Record<string, string>) => {
+  const search = params ? '?' + new URLSearchParams(params).toString() : '';
+  return api(`/contestants${search}`);
+};
+
+export const getContestantById = async (id: string) => api(`/contestants/${id}`);
+
+export const createContestant = async (data: Record<string, any>) => {
+  return api('/contestants', { method: 'POST', body: JSON.stringify(data) });
+};
+
+export const updateContestant = async (id: string, data: Record<string, any>) => {
+  return api(`/contestants/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+};
+
+export const deleteContestant = async (id: string) => {
+  return api(`/contestants/${id}`, { method: 'DELETE' });
+};
+
+export const useGetAllContestants = (params?: Record<string, string>) => {
+  return useQuery({ queryKey: ['contestants', params], queryFn: () => getAllContestants(params) });
+};
+
+export const useGetContestantById = (id: string) => {
+  return useQuery({ queryKey: ['contestant', id], queryFn: () => getContestantById(id), enabled: !!id });
+};
+
+export const useCreateContestant = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: createContestant, onSuccess: () => qc.invalidateQueries({ queryKey: ['contestants'] }) });
+};
+
+export const useUpdateContestant = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: ({ id, data }: { id: string; data: any }) => updateContestant(id, data), onSuccess: () => qc.invalidateQueries({ queryKey: ['contestants'] }) });
+};
+
+export const useDeleteContestant = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: deleteContestant, onSuccess: () => qc.invalidateQueries({ queryKey: ['contestants'] }) });
+};
+
+// ─── Public Contests (no auth) ────────────────────────────────────────────
+
+export const getPublicContests = async (params?: Record<string, string>) => {
+  const cleaned: Record<string, string> = { limit: '50', ...(params || {}) };
+  Object.keys(cleaned).forEach((k) => { if (!cleaned[k]) delete cleaned[k]; });
+  const search = '?' + new URLSearchParams(cleaned).toString();
+  return api(`/public/contests${search}`, { skipAuth: true });
+};
+
+export const useGetPublicContests = (params?: Record<string, string>, enabled = true) => {
+  return useQuery({
+    queryKey: ['public-contests', params],
+    queryFn: () => getPublicContests(params),
+    enabled,
+  });
+};
+
+export const getPublicContestById = async (id: string) => api(`/public/contests/${id}`, { skipAuth: true });
+
+export const useGetPublicContestById = (id: string) => {
+  return useQuery({ queryKey: ['public-contest', id], queryFn: () => getPublicContestById(id), enabled: !!id });
+};
+
+export const initiateContestPurchase = async (id: string, data: { name: string; email: string; phone: string }) => {
+  return api(`/public/contests/${id}/purchase/initiate`, { method: 'POST', body: JSON.stringify(data) });
+};
+
+export const verifyContestPurchase = async (id: string, data: { order_id: string; payment_id: string; signature: string }) => {
+  return api(`/public/contests/${id}/purchase/verify`, { method: 'POST', body: JSON.stringify(data) });
+};
+
+export const checkContestAccess = async (id: string) => api(`/public/contests/${id}/access`);
+
+export const voteContestant = async (contestantId: string) => {
+  return api(`/public/contestants/${contestantId}/vote`, { method: 'POST' });
+};
+
+export const getContestVotes = async (contestVideoId: string) => api(`/public/contestants/${contestVideoId}/votes`);
+
+export const useGetContestVotes = (contestVideoId: string) => {
+  return useQuery({ queryKey: ['contest-votes', contestVideoId], queryFn: () => getContestVotes(contestVideoId), enabled: !!contestVideoId });
+};
+
+export const useInitiateContestPurchase = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (params: { id: string; data: { name: string; email: string; phone: string } }) => initiateContestPurchase(params.id, params.data) });
+};
+
+export const useVerifyContestPurchase = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (params: { id: string; data: { order_id: string; payment_id: string; signature: string } }) => verifyContestPurchase(params.id, params.data) });
+};
+
+export const useVoteContestant = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: voteContestant, onSuccess: () => qc.invalidateQueries({ queryKey: ['contest-votes'] }) });
 };
 
 // ─── Public Audio (no auth) ────────────────────────────────────────────
