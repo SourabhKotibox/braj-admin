@@ -34,6 +34,12 @@ function ImageBox({ label, preview, onOpen }: { label: string; preview: string; 
   );
 }
 
+function refId(value: any): string {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  return value.id || value._id?.toString?.() || "";
+}
+
 function SectionCard({ title, icon: Icon, children, defaultOpen = true }: { title: string; icon: any; children: React.ReactNode; defaultOpen?: boolean }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
@@ -158,12 +164,12 @@ export default function AudioFormPage() {
       setShortDescription(a.shortDescription || "");
       setAudioUrl(a.audioUrl || "");
       setDuration(a.duration?.toString() || "");
-      setGenre(a.genre?.id || a.genre || "");
-      setCategory(a.category?.id || a.category || "");
-      setLanguage(a.language?.id || a.language || "");
+      setGenre(refId(a.genre));
+      setCategory(refId(a.category));
+      setLanguage(refId(a.language));
       setCountry(a.country || "");
-      setArtistId(a.artistId || "");
-      setAlbumId(a.albumId || "");
+      setArtistId(refId(a.artistId));
+      setAlbumId(refId(a.albumId));
       setTags(a.tags || []);
       setStatus(a.status || "draft");
       setFeatured(a.featured || false);
@@ -322,9 +328,9 @@ export default function AudioFormPage() {
       const payload = {
         title: title.trim(),
         artist: artist.trim(),
-        artistId: artistId,
+        artistId: artistId || undefined,
         album: album.trim(),
-        albumId: albumId,
+        albumId: albumId || undefined,
         description,
         shortDescription,
         thumbnail: thumbnail.filePath,

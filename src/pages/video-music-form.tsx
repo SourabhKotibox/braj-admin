@@ -17,6 +17,12 @@ import {
 
 type QualityRow = { id: string; type: string; quality: string; filePath: string; url: string };
 
+function refId(value: any): string {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  return value.id || value._id?.toString?.() || "";
+}
+
 function ImageBox({ label, preview, onOpen }: { label: string; preview: string; onOpen: () => void }) {
   return (
     <div className="flex-1 min-w-0">
@@ -116,9 +122,9 @@ export default function VideoMusicFormPage() {
       setVideoUrl(v.videoUrl || "");
       setHlsUrl(v.hlsUrl || "");
       setDuration(v.duration?.toString() || "");
-      setGenre(v.genre?.id || v.genre || "");
-      setCategory(v.category?.id || v.category || "");
-      setLanguage(v.language?.id || v.language || "");
+      setGenre(refId(v.genre));
+      setCategory(refId(v.category));
+      setLanguage(refId(v.language));
       setCountry(v.country || "");
       setTags(v.tags || []);
       setStatus(v.status || "draft");
@@ -175,10 +181,10 @@ export default function VideoMusicFormPage() {
         videoUrl: videoUrl || videoFilePath,
         hlsUrl,
         duration: duration ? Number(duration) : undefined,
-        genre,
-        category,
-        language,
-        country,
+        genre: genre || undefined,
+        category: category || undefined,
+        language: language || undefined,
+        country: country || undefined,
         tags,
         status,
         featured,

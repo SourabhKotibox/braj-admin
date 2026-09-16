@@ -17,6 +17,12 @@ import {
   useGetAllContestants, useCreateContestant, useDeleteContestant,
 } from "@/lib/api-client";
 
+function refId(value: any): string {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  return value.id || value._id?.toString?.() || "";
+}
+
 export default function ContestFormPage() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
@@ -85,9 +91,9 @@ export default function ContestFormPage() {
       setVideoUrl(v.videoUrl || "");
       setHlsUrl(v.hlsUrl || "");
       setDuration(v.duration?.toString() || "");
-      setGenre(v.genre?.id || v.genre || "");
-      setCategory(v.category?.id || v.category || "");
-      setLanguage(v.language?.id || v.language || "");
+      setGenre(refId(v.genre));
+      setCategory(refId(v.category));
+      setLanguage(refId(v.language));
       setTags(v.tags || []);
       setStatus(v.status || "draft");
       setFeatured(v.featured || false);
@@ -114,9 +120,9 @@ export default function ContestFormPage() {
         videoUrl: videoUrl || videoFilePath,
         hlsUrl,
         duration: duration ? Number(duration) : undefined,
-        genre,
-        category,
-        language,
+        genre: genre || undefined,
+        category: category || undefined,
+        language: language || undefined,
         tags,
         status,
         featured,
