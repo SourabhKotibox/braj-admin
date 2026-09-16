@@ -12,6 +12,7 @@ import {
   useGetPublicBanners
 } from "@/lib/api-client";
 import { PublicHeader, PublicFooter } from "./streaming-home";
+import { getVideoPlaybackUrls, isHlsUrl, toAbsoluteMediaUrl } from "@/lib/video-playback";
 
 interface VideoTrack {
   id: string;
@@ -22,6 +23,8 @@ interface VideoTrack {
   thumbnail?: string;
   coverImage?: string;
   videoUrl: string;
+  originalVideoUrl?: string;
+  playbackUrls?: string[];
   hlsUrl?: string;
   videoQualities?: Array<{ quality: string; url: string; size: number; }>;
   duration?: number;
@@ -60,6 +63,7 @@ export default function VideoMusicPage() {
     const [showQueue, setShowQueue] = useState(false);
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [playbackUrlIndex, setPlaybackUrlIndex] = useState(0);
     const { data: bannersRes } = useGetPublicBanners({ page: "videos", limit: "10" });
     const banners = bannersRes?.data || [];
 
@@ -80,7 +84,9 @@ export default function VideoMusicPage() {
   const mapVideo = (v: any): VideoTrack => ({
     ...v,
     id: v.id || v._id,
-    videoUrl: v.videoUrl || v.videoQualities?.[0]?.url || v.hlsUrl || "",
+    originalVideoUrl: v.originalVideoUrl || v.videoUrl,
+    playbackUrls: v.playbackUrls,
+    videoUrl: v.videoUrl || v.originalVideoUrl || v.videoQualities?.[0]?.url || v.hlsUrl || "",
   });
   const allVideos: VideoTrack[] = (allVideosData?.data || []).map(mapVideo);
   const artists: string[] = artistsData?.data || [];
@@ -107,49 +113,51 @@ export default function VideoMusicPage() {
 
   useEffect(() => { if (allVideos.length > 0 && !currentTrack) setQueue(allVideos); }, [allVideos]);
 
-  const getVideoUrl = useCallback((track: VideoTrack) => {
-    let url = track.videoUrl;
-    if (track.videoQualities?.length) {
-      const high = track.videoQualities.find(q => q.quality === "720p" || q.quality === "1080p");
-      url = high?.url || track.videoQualities[0]?.url || track.videoUrl || track.hlsUrl;
-    } else {
-      url = track.hlsUrl || track.videoUrl;
-    }
-    if (url && url.startsWith("http")) return url;
-    return url ? getImageUrl(url) : "";
+  const getPlaybackCandidates = useCallback((track: VideoTrack) => {
+    return getVideoPlaybackUrls(track).map((url) => toAbsoluteMediaUrl(url, getImageUrl));
   }, []);
 
+  const getVideoUrl = useCallback((track: VideoTrack, index = 0) => {
+    const candidates = getPlaybackCandidates(track);
+    return candidates[index] || candidates[0] || "";
+  }, [getPlaybackCandidates]);
+
   useEffect(() => {
-    if (!currentTrack || !videoRef.current) return;
+    setPlaybackUrlIndex(0);
+  }, [currentTrack?.id]);
+
+  const loadVideoSource = useCallback((url: string, autoplay = true) => {
     const video = videoRef.current;
-    const url = getVideoUrl(currentTrack);
-    if (!url) return;
+    if (!video || !url) return;
 
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
 
-    const isM3u8 = url.includes(".m3u8");
     const startPlayback = () => {
+      if (!autoplay) return;
       video.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
     };
 
-    if (isM3u8 && Hls.isSupported()) {
+    if (isHlsUrl(url) && Hls.isSupported()) {
       const hls = new Hls();
       hlsRef.current = hls;
       hls.loadSource(url);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, startPlayback);
-    } else if (isM3u8 && video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = url;
-      video.load();
-      startPlayback();
     } else {
       video.src = url;
       video.load();
       startPlayback();
     }
+  }, []);
+
+  useEffect(() => {
+    if (!currentTrack || !videoRef.current) return;
+    const url = getVideoUrl(currentTrack, playbackUrlIndex);
+    if (!url) return;
+    loadVideoSource(url);
 
     return () => {
       if (hlsRef.current) {
@@ -157,18 +165,34 @@ export default function VideoMusicPage() {
         hlsRef.current = null;
       }
     };
-  }, [currentTrack, getVideoUrl]);
+  }, [currentTrack, playbackUrlIndex, getVideoUrl, loadVideoSource]);
 
   const filteredVideosForDisplay = allVideos.filter((v) => { if (activeTab === "trending") return v.trending; if (activeTab === "featured") return v.featured; if (activeTab === "exclusive") return v.isExclusive; return true; });
-  const handlePlay = (track: VideoTrack, trackList?: VideoTrack[]) => { setCurrentTrack(track); const list = trackList || filteredVideosForDisplay; const idx = list.findIndex((v) => v.id === track.id); setQueue(list.slice(idx)); };
+  const handlePlay = (track: VideoTrack, trackList?: VideoTrack[]) => { setCurrentTrack(track); setPlaybackUrlIndex(0); const list = trackList || filteredVideosForDisplay; const idx = list.findIndex((v) => v.id === track.id); setQueue(list.slice(idx)); };
   const handleNext = useCallback(() => { if (!currentTrack || queue.length === 0) return; const idx = queue.findIndex((t) => t.id === currentTrack.id); setCurrentTrack(idx < queue.length - 1 ? queue[idx + 1] : queue[0]); }, [currentTrack, queue]);
+
+  const tryNextPlaybackUrl = useCallback(() => {
+    if (!currentTrack) return false;
+    const candidates = getPlaybackCandidates(currentTrack);
+    if (playbackUrlIndex >= candidates.length - 1) return false;
+    setPlaybackUrlIndex((i) => i + 1);
+    return true;
+  }, [currentTrack, playbackUrlIndex, getPlaybackCandidates]);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !currentTrack) return;
     const onTime = () => setCurrentTime(video.currentTime);
     const onMeta = () => setDuration(video.duration);
-    const onEnd = () => handleNext();
+    const onEnd = () => {
+      const expected = currentTrack.duration || duration;
+      const played = video.currentTime || currentTime;
+      // Stream ended too early (partial HLS) — try next URL before skipping track
+      if (expected > 30 && played < expected * 0.85) {
+        if (tryNextPlaybackUrl()) return;
+      }
+      handleNext();
+    };
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
     const onBuffer = () => { if (video.buffered.length > 0) setBuffered(video.buffered.end(video.buffered.length - 1)); };
@@ -176,7 +200,7 @@ export default function VideoMusicPage() {
     video.addEventListener("ended", onEnd); video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause); video.addEventListener("progress", onBuffer);
     return () => { video.removeEventListener("timeupdate", onTime); video.removeEventListener("loadedmetadata", onMeta); video.removeEventListener("ended", onEnd); video.removeEventListener("play", onPlay); video.removeEventListener("pause", onPause); video.removeEventListener("progress", onBuffer); };
-  }, [currentTrack, handleNext]);
+  }, [currentTrack, handleNext, tryNextPlaybackUrl, duration, currentTime]);
   const handlePrev = () => { if (!currentTrack || queue.length === 0) return; const idx = queue.findIndex((t) => t.id === currentTrack.id); setCurrentTrack(idx > 0 ? queue[idx - 1] : queue[queue.length - 1]); };
   const togglePlay = () => { if (!videoRef.current) return; if (isPlaying) videoRef.current.pause(); else videoRef.current.play().catch(() => {}); };
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => { const t = Number(e.target.value); if (videoRef.current) videoRef.current.currentTime = t; setCurrentTime(t); };
