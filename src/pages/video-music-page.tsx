@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
+import Hls from "hls.js";
 import { Search, Play, Pause, Heart, TrendingUp, Star, Film, Volume2, VolumeX, SkipBack, SkipForward, Share2, Download, Sparkles, Video, Maximize2, Minimize2, Check, Users, Disc3, ArrowLeft, PlayCircle, Clock, ChevronRight, GripVertical, XCircle, ListMusic, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { 
@@ -37,6 +38,7 @@ export default function VideoMusicPage() {
   const [, setLocation] = useLocation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
   const [search, setSearch] = useState("");
   const [currentTrack, setCurrentTrack] = useState<VideoTrack | null>(null);
   const [queue, setQueue] = useState<VideoTrack[]>([]);
@@ -121,12 +123,49 @@ export default function VideoMusicPage() {
     if (!currentTrack || !videoRef.current) return;
     const video = videoRef.current;
     const url = getVideoUrl(currentTrack);
-    if (video.src !== url) { video.src = url; video.load(); video.play().then(() => setIsPlaying(true)).catch(() => {}); }
+    if (!url) return;
+
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    const isM3u8 = url.includes(".m3u8");
+    const startPlayback = () => {
+      video.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+    };
+
+    if (isM3u8 && Hls.isSupported()) {
+      const hls = new Hls();
+      hlsRef.current = hls;
+      hls.loadSource(url);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, startPlayback);
+    } else if (isM3u8 && video.canPlayType("application/vnd.apple.mpegurl")) {
+      video.src = url;
+      video.load();
+      startPlayback();
+    } else {
+      video.src = url;
+      video.load();
+      startPlayback();
+    }
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
   }, [currentTrack, getVideoUrl]);
+
+  const filteredVideosForDisplay = allVideos.filter((v) => { if (activeTab === "trending") return v.trending; if (activeTab === "featured") return v.featured; if (activeTab === "exclusive") return v.isExclusive; return true; });
+  const handlePlay = (track: VideoTrack, trackList?: VideoTrack[]) => { setCurrentTrack(track); const list = trackList || filteredVideosForDisplay; const idx = list.findIndex((v) => v.id === track.id); setQueue(list.slice(idx)); };
+  const handleNext = useCallback(() => { if (!currentTrack || queue.length === 0) return; const idx = queue.findIndex((t) => t.id === currentTrack.id); setCurrentTrack(idx < queue.length - 1 ? queue[idx + 1] : queue[0]); }, [currentTrack, queue]);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !currentTrack) return;
     const onTime = () => setCurrentTime(video.currentTime);
     const onMeta = () => setDuration(video.duration);
     const onEnd = () => handleNext();
@@ -137,11 +176,7 @@ export default function VideoMusicPage() {
     video.addEventListener("ended", onEnd); video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause); video.addEventListener("progress", onBuffer);
     return () => { video.removeEventListener("timeupdate", onTime); video.removeEventListener("loadedmetadata", onMeta); video.removeEventListener("ended", onEnd); video.removeEventListener("play", onPlay); video.removeEventListener("pause", onPause); video.removeEventListener("progress", onBuffer); };
-  }, [queue]);
-
-  const filteredVideosForDisplay = allVideos.filter((v) => { if (activeTab === "trending") return v.trending; if (activeTab === "featured") return v.featured; if (activeTab === "exclusive") return v.isExclusive; return true; });
-  const handlePlay = (track: VideoTrack, trackList?: VideoTrack[]) => { setCurrentTrack(track); const list = trackList || filteredVideosForDisplay; const idx = list.findIndex((v) => v.id === track.id); setQueue(list.slice(idx)); };
-  const handleNext = useCallback(() => { if (!currentTrack || queue.length === 0) return; const idx = queue.findIndex((t) => t.id === currentTrack.id); setCurrentTrack(idx < queue.length - 1 ? queue[idx + 1] : queue[0]); }, [currentTrack, queue]);
+  }, [currentTrack, handleNext]);
   const handlePrev = () => { if (!currentTrack || queue.length === 0) return; const idx = queue.findIndex((t) => t.id === currentTrack.id); setCurrentTrack(idx > 0 ? queue[idx - 1] : queue[queue.length - 1]); };
   const togglePlay = () => { if (!videoRef.current) return; if (isPlaying) videoRef.current.pause(); else videoRef.current.play().catch(() => {}); };
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => { const t = Number(e.target.value); if (videoRef.current) videoRef.current.currentTime = t; setCurrentTime(t); };
@@ -210,7 +245,6 @@ export default function VideoMusicPage() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
       <PublicHeader activeTab="home" setActiveTab={() => {}} onSignIn={() => setLocation("/login")} onNavigate={(path) => setLocation(path)} />
-      <video ref={videoRef} preload="metadata" playsInline className="hidden" />
       <div className="pt-16" />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-32">
@@ -414,10 +448,23 @@ export default function VideoMusicPage() {
         {currentTrack && (
           <div className="flex flex-col lg:flex-row gap-6">
             <div className="flex-1">
-              <div ref={containerRef} className="relative bg-black rounded-2xl overflow-hidden shadow-2xl" onClick={togglePlay}>
+              <div ref={containerRef} className="relative bg-black rounded-2xl overflow-hidden shadow-2xl">
                 <div className="aspect-video relative">
-                  {currentTrack.thumbnail || currentTrack.coverImage ? (<img src={getImageUrl(currentTrack.thumbnail || currentTrack.coverImage || "")} alt={currentTrack.title} className="w-full h-full object-cover" />) : (<div className="w-full h-full bg-gradient-to-br from-violet-900 to-black flex items-center justify-center"><Film className="w-20 h-20 text-violet-500/50" /></div>)}
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><button className="w-20 h-20 rounded-full bg-red-600/90 hover:bg-red-600 flex items-center justify-center shadow-2xl transition-all hover:scale-110">{isPlaying ? <Pause className="w-10 h-10 text-white" /> : <Play className="w-10 h-10 text-white ml-1" />}</button></div>
+                  <video
+                    ref={videoRef}
+                    className="w-full h-full object-contain bg-black"
+                    playsInline
+                    preload="metadata"
+                    poster={currentTrack.thumbnail || currentTrack.coverImage ? getImageUrl(currentTrack.thumbnail || currentTrack.coverImage || "") : undefined}
+                    onClick={togglePlay}
+                  />
+                  {!isPlaying && (
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none">
+                      <div className="w-20 h-20 rounded-full bg-red-600/90 flex items-center justify-center shadow-2xl">
+                        <Play className="w-10 h-10 text-white ml-1" />
+                      </div>
+                    </div>
+                  )}
                   <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 to-transparent">
                     <div className="mb-3"><div className="relative h-1 bg-white/30 rounded-full overflow-hidden cursor-pointer" onClick={(e) => { e.stopPropagation(); const rect = e.currentTarget.getBoundingClientRect(); const percent = (e.clientX - rect.left) / rect.width; handleSeek({ target: { value: String(percent * (duration || 100)) } } as any); }}><div className="absolute h-full bg-white/50 rounded-full" style={{ width: `${(buffered / (duration || 100)) * 100}%` }} /><div className="absolute h-full bg-red-500 rounded-full" style={{ width: `${(currentTime / (duration || 100)) * 100}%` }} /></div></div>
                     <div className="flex items-center justify-between">

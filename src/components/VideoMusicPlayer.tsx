@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Heart, Share2, Download, Video } from "lucide-react";
+import Hls from "hls.js";
+import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Heart, Share2, Download } from "lucide-react";
 
 interface VideoMusicPlayerProps {
   src: string;
@@ -13,6 +14,7 @@ interface VideoMusicPlayerProps {
 
 export default function VideoMusicPlayer({ src, title, artist, poster, onLike, onShare, onDownload }: VideoMusicPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -22,20 +24,55 @@ export default function VideoMusicPlayer({ src, title, artist, poster, onLike, o
 
   useEffect(() => {
     const video = videoRef.current;
+    if (!video || !src) return;
+
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    const isM3u8 = src.includes(".m3u8");
+
+    if (isM3u8 && Hls.isSupported()) {
+      const hls = new Hls();
+      hlsRef.current = hls;
+      hls.loadSource(src);
+      hls.attachMedia(video);
+    } else {
+      video.src = src;
+      video.load();
+    }
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [src]);
+
+  useEffect(() => {
+    const video = videoRef.current;
     if (!video) return;
 
     const updateTime = () => setCurrentTime(video.currentTime);
     const updateDuration = () => setDuration(video.duration);
     const handleEnded = () => setIsPlaying(false);
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
 
     video.addEventListener("timeupdate", updateTime);
     video.addEventListener("loadedmetadata", updateDuration);
     video.addEventListener("ended", handleEnded);
+    video.addEventListener("play", handlePlay);
+    video.addEventListener("pause", handlePause);
 
     return () => {
       video.removeEventListener("timeupdate", updateTime);
       video.removeEventListener("loadedmetadata", updateDuration);
       video.removeEventListener("ended", handleEnded);
+      video.removeEventListener("play", handlePlay);
+      video.removeEventListener("pause", handlePause);
     };
   }, []);
 
@@ -48,7 +85,6 @@ export default function VideoMusicPlayer({ src, title, artist, poster, onLike, o
     } else {
       video.play();
     }
-    setIsPlaying(!isPlaying);
   }, [isPlaying]);
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -98,11 +134,11 @@ export default function VideoMusicPlayer({ src, title, artist, poster, onLike, o
     <div className="w-full bg-black rounded-2xl overflow-hidden">
       <video
         ref={videoRef}
-        src={src}
         poster={poster}
         preload="metadata"
-        className="w-full aspect-video bg-black"
+        className="w-full aspect-video bg-black object-contain"
         playsInline
+        onClick={togglePlay}
       />
 
       <div className="p-4 bg-zinc-900">
