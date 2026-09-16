@@ -26,21 +26,74 @@ type ApiOptions = RequestInit & {
 export const getImageUrl = (filePath) => {
   if (!filePath) return "";
 
-  if (filePath.startsWith("http")) {
-    // Convert legacy S3 URLs to local server paths
-    const s3Match = filePath.match(/amazonaws\.com\/(.+)$/);
-    if (s3Match) {
-      return `${baseUrl}/${s3Match[1]}`;
-    }
-    return filePath;
+  // Unwrap accidental double-prefix: /uploads/https://... or site/uploads/https://...
+  const embeddedHttp = String(filePath).match(/https?:\/\/[^\s"']+/i);
+  if (embeddedHttp && (String(filePath).includes("/uploads/http") || String(filePath).startsWith("uploads/http"))) {
+    return normalizeAbsoluteMediaUrl(embeddedHttp[0]);
+  }
+
+  if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
+    return normalizeAbsoluteMediaUrl(filePath);
   }
 
   if (filePath.startsWith("/uploads/") || filePath.startsWith("uploads/")) {
     const cleanPath = filePath.startsWith("/") ? filePath.slice(1) : filePath;
-    return `${baseUrl}/${cleanPath}`;
+    return `${baseUrl.replace(/\/$/, "")}/${cleanPath}`;
   }
 
-  return `${baseUrl}/${filePath}`;
+  return `${baseUrl.replace(/\/$/, "")}/${String(filePath).replace(/^\//, "")}`;
+};
+
+/** Prefer the real CDN/Spaces URL; never leave /uploads/https://... intact. */
+export const normalizeAbsoluteMediaUrl = (url) => {
+  if (!url) return "";
+  let value = String(url).trim();
+
+  // Extract the last absolute http(s) URL if the string was double-prefixed
+  const matches = value.match(/https?:\/\/[^\s"']+/gi);
+  if (matches && matches.length > 1) {
+    value = matches[matches.length - 1];
+  } else if (matches && matches.length === 1 && !value.startsWith("http")) {
+    value = matches[0];
+  }
+
+  // Strip accidental /uploads/ prefix in front of an absolute URL
+  value = value.replace(/^https?:\/\/[^/]+\/uploads\/(https?:\/\/)/i, "$1");
+  value = value.replace(/^\/?uploads\/(https?:\/\/)/i, "$1");
+
+  // Legacy AWS → local mapping only for amazonaws hosts
+  const s3Match = value.match(/amazonaws\.com\/(.+)$/);
+  if (s3Match) {
+    return `${baseUrl.replace(/\/$/, "")}/${s3Match[1]}`;
+  }
+
+  return value;
+};
+
+/** Value to persist in DB — keep Spaces/CDN URLs absolute; keep relative upload paths relative. */
+export const toStorageMediaPath = (url) => {
+  if (!url) return "";
+  const cleaned = normalizeAbsoluteMediaUrl(url);
+  if (!cleaned) return "";
+
+  // Ignore placeholder HLS from the form
+  if (/example\.com\/playlist\.m3u8/i.test(cleaned)) return "";
+
+  // Absolute remote (Spaces/S3/CDN) — store as-is
+  if (/^https?:\/\//i.test(cleaned) && !cleaned.includes(baseUrl.replace(/\/$/, ""))) {
+    return cleaned;
+  }
+
+  // Absolute local API URL → store relative /uploads/... when possible
+  try {
+    const apiBase = baseUrl.replace(/\/$/, "");
+    if (cleaned.startsWith(apiBase + "/")) {
+      const path = cleaned.slice(apiBase.length);
+      if (path.startsWith("/uploads/")) return path;
+    }
+  } catch {}
+
+  return cleaned;
 };
 
 export const setBaseUrl = (url) => {

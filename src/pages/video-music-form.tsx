@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import MediaPicker from "@/components/MediaPicker";
-import { getImageUrl } from "@/lib/api-client";
+import { getImageUrl, toStorageMediaPath } from "@/lib/api-client";
 import {
   useGetVideoMusicById, useCreateVideoMusic, useUpdateVideoMusic,
   useGetGenres, useGetCategoriesList, useGetLanguagesList, useGetCountries,
@@ -119,8 +119,8 @@ export default function VideoMusicFormPage() {
       setAlbum(v.album || "");
       setDescription(v.description || "");
       setShortDescription(v.shortDescription || "");
-      setVideoUrl(v.videoUrl || "");
-      setHlsUrl(v.hlsUrl || "");
+      setVideoUrl(toStorageMediaPath(v.videoUrl) || v.videoUrl || "");
+      setHlsUrl(/example\.com/i.test(v.hlsUrl || "") ? "" : (toStorageMediaPath(v.hlsUrl) || v.hlsUrl || ""));
       setDuration(v.duration?.toString() || "");
       setGenre(refId(v.genre));
       setCategory(refId(v.category));
@@ -151,8 +151,9 @@ export default function VideoMusicFormPage() {
   }, [videoData, isEdit]);
 
   const handleVideoSelect = (media: any) => {
-    setVideoFilePath(media.filePath);
-    setVideoUrl(media.url || media.filePath);
+    const stored = toStorageMediaPath(media.filePath || media.url) || media.filePath || media.url || "";
+    setVideoFilePath(stored);
+    setVideoUrl(stored);
     setVideoPickerOpen(false);
     if (!title && media.name) {
       setTitle(media.name.replace(/\.[^/.]+$/, ""));
@@ -160,8 +161,9 @@ export default function VideoMusicFormPage() {
     if (media.duration) {
       setDuration(media.duration.toString());
     }
-    if (media.isHls && media.hlsMasterPlaylistUrl) {
-      setHlsUrl(media.hlsMasterPlaylistUrl);
+    const hls = media.hlsMasterPlaylistUrl || media.hlsUrl;
+    if (media.isHls && hls && !/example\.com/i.test(hls)) {
+      setHlsUrl(toStorageMediaPath(hls) || hls);
     }
   };
 
@@ -169,17 +171,24 @@ export default function VideoMusicFormPage() {
     e.preventDefault();
     setIsSaving(true);
     try {
+      const cleanVideoUrl = toStorageMediaPath(videoUrl || videoFilePath) || videoUrl || videoFilePath || "";
+      const cleanHls = /example\.com/i.test(hlsUrl || "") ? "" : (toStorageMediaPath(hlsUrl) || hlsUrl || "");
+      if (!cleanVideoUrl) {
+        toast({ title: "Please select a video file", variant: "destructive" });
+        setIsSaving(false);
+        return;
+      }
       const payload = {
         title,
         artist,
         album,
         description,
         shortDescription,
-        thumbnail: thumbnail.filePath,
-        coverImage: coverImage.filePath,
-        bannerImage: bannerImage.filePath,
-        videoUrl: videoUrl || videoFilePath,
-        hlsUrl,
+        thumbnail: toStorageMediaPath(thumbnail.filePath) || thumbnail.filePath,
+        coverImage: toStorageMediaPath(coverImage.filePath) || coverImage.filePath,
+        bannerImage: toStorageMediaPath(bannerImage.filePath) || bannerImage.filePath,
+        videoUrl: cleanVideoUrl,
+        hlsUrl: cleanHls || undefined,
         duration: duration ? Number(duration) : undefined,
         genre: genre || undefined,
         category: category || undefined,
@@ -199,7 +208,7 @@ export default function VideoMusicFormPage() {
         videoQualities: qualityEnabled
           ? qualityRows.filter((q) => q.url || q.filePath).map((q) => ({
               quality: q.quality,
-              url: q.url || q.filePath,
+              url: toStorageMediaPath(q.url || q.filePath) || q.url || q.filePath,
               size: 0,
             }))
           : [],
@@ -258,7 +267,7 @@ export default function VideoMusicFormPage() {
           </div>
           <div className="space-y-2">
             <Label>HLS URL</Label>
-            <Input value={hlsUrl} onChange={(e) => setHlsUrl(e.target.value)} placeholder="https://example.com/playlist.m3u8" />
+            <Input value={hlsUrl} onChange={(e) => setHlsUrl(e.target.value)} placeholder="Leave empty unless you have a real .m3u8 URL" />
           </div>
         </div>
 

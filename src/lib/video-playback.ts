@@ -1,3 +1,5 @@
+import { getImageUrl } from "@/lib/api-client";
+
 export function isHlsUrl(url?: string | null): boolean {
   return !!url && url.includes(".m3u8");
 }
@@ -10,13 +12,15 @@ export function getVideoPlaybackUrls(track: {
   videoQualities?: Array<{ quality?: string; url?: string }>;
 }): string[] {
   if (track.playbackUrls?.length) {
-    return track.playbackUrls.filter(Boolean);
+    return track.playbackUrls.filter(Boolean).map((u) => toAbsoluteMediaUrl(u, getImageUrl));
   }
 
   const urls: string[] = [];
   const add = (u?: string | null) => {
-    if (!u || urls.includes(u)) return;
-    urls.push(u);
+    if (!u) return;
+    const abs = toAbsoluteMediaUrl(u, getImageUrl);
+    if (!abs || urls.includes(abs)) return;
+    urls.push(abs);
   };
 
   add(track.originalVideoUrl);
@@ -41,6 +45,6 @@ export function getVideoPlaybackUrls(track: {
 
 export function toAbsoluteMediaUrl(url: string, baseFn: (path: string) => string): string {
   if (!url) return "";
-  if (url.startsWith("http")) return url;
-  return baseFn(url);
+  // getImageUrl already unwraps /uploads/https://... double prefixes
+  return baseFn(url) || url;
 }

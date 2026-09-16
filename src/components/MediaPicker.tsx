@@ -3,7 +3,7 @@ import { Upload, Image as ImageIcon, Video, X, Loader2, Search, Check, Music } f
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useGetAllMediaFiles, uploadMediaFiles, getMediaFolders, createMediaFolder } from "@/lib/api-client";
-import { getImageUrl } from "@/lib/api-client";
+import { getImageUrl, toStorageMediaPath } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 
 interface MediaPickerProps {
@@ -57,11 +57,15 @@ export default function MediaPicker({ open, onClose, onSelect, source, accept = 
 
   const handleConfirm = async () => {
     if (mode === "library" && selectedMedia) {
-      // Pass the entire media object
+      const raw = selectedMedia.url || selectedMedia.filePath || "";
+      const storagePath = toStorageMediaPath(raw) || raw;
       onSelect({
         ...selectedMedia,
-        url: getImageUrl(selectedMedia.filePath || selectedMedia.url),
-        filePath: selectedMedia.filePath || selectedMedia.url,
+        url: getImageUrl(storagePath),
+        filePath: storagePath,
+        hlsMasterPlaylistUrl: selectedMedia.hlsMasterPlaylistUrl
+          ? toStorageMediaPath(selectedMedia.hlsMasterPlaylistUrl) || selectedMedia.hlsMasterPlaylistUrl
+          : selectedMedia.hlsMasterPlaylistUrl,
       });
       handleClose();
     } else if (mode === "upload" && selectedMedia?.file) {
@@ -85,11 +89,15 @@ export default function MediaPicker({ open, onClose, onSelect, source, accept = 
 
         const uploadedFile = result?.data?.[0];
         if (uploadedFile) {
-          // Pass the entire uploaded file
+          const raw = uploadedFile.url || uploadedFile.filePath || "";
+          const storagePath = toStorageMediaPath(raw) || raw;
           onSelect({
             ...uploadedFile,
-            url: getImageUrl(uploadedFile.filePath || uploadedFile.url),
-            filePath: uploadedFile.filePath || uploadedFile.url,
+            url: getImageUrl(storagePath),
+            filePath: storagePath,
+            hlsMasterPlaylistUrl: uploadedFile.hlsMasterPlaylistUrl
+              ? toStorageMediaPath(uploadedFile.hlsMasterPlaylistUrl) || uploadedFile.hlsMasterPlaylistUrl
+              : uploadedFile.hlsMasterPlaylistUrl,
           });
         } else {
           onSelect({ url: preview || "", filePath: "", name: selectedMedia.name });
