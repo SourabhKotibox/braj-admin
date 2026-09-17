@@ -144,7 +144,7 @@ export default function Dashboard() {
     { title: "Active Subscribers", value: stats?.totalSubscribers?.toLocaleString() ?? "0", icon: Users, sub: "Currently active plans", highlight: false },
     { title: "Expiring Soon", value: stats?.soonToExpire?.toLocaleString() ?? "0", icon: Clock, sub: "Within next 7 days", highlight: false },
     { title: "Total Reviews", value: stats?.totalReviews?.toLocaleString() ?? "0", icon: Star, sub: "Published reviews", highlight: false },
-    { title: "Total Storage Usage", value: stats?.totalStorageUsage ?? "0 MB", icon: HardDrive, sub: "Media files stored", highlight: false },
+    { title: "Total Storage Usage", value: stats?.totalStorageUsage ?? "0 B", icon: HardDrive, sub: `${(stats?.totalMediaFiles ?? 0).toLocaleString()} media files stored`, highlight: false },
     { title: "Content Library", value: stats?.restContent?.toLocaleString() ?? "0", icon: Film, sub: "Movies + TV shows", highlight: false },
     { title: "Subscription Revenue", value: formatStatRevenue(stats?.subscriptionRevenue), icon: DollarSign, sub: "Active plans revenue", highlight: false },
     { title: "Coin Purchase Revenue", value: formatStatRevenue(stats?.coinRevenue), icon: Coins, sub: `${stats?.totalCoinTransactions ?? 0} coin transactions`, highlight: true },
