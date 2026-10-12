@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import Hls from "hls.js";
 import { Search, Play, Pause, Heart, TrendingUp, Star, Film, Volume2, VolumeX, SkipBack, SkipForward, Share2, Download, Sparkles, Video, Maximize2, Minimize2, Check, Users, Disc3, ArrowLeft, PlayCircle, Clock, ChevronRight, GripVertical, XCircle, ListMusic, X } from "lucide-react";
@@ -66,6 +66,20 @@ export default function VideoMusicPage() {
   const [playbackUrlIndex, setPlaybackUrlIndex] = useState(0);
     const { data: bannersRes } = useGetPublicBanners({ page: "videos", limit: "10" });
     const banners = bannersRes?.data || [];
+  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+  const [fadingBanner, setFadingBanner] = useState(false);
+
+  const goBanner = useCallback((index: number) => {
+    if (index === currentBannerIndex || banners.length === 0) return;
+    setFadingBanner(true);
+    setTimeout(() => { setCurrentBannerIndex(index); setFadingBanner(false); }, 400);
+  }, [currentBannerIndex, banners.length]);
+
+  useEffect(() => {
+    if (banners.length <= 1) return;
+    const timer = setInterval(() => goBanner((currentBannerIndex + 1) % banners.length), 6000);
+    return () => clearInterval(timer);
+  }, [currentBannerIndex, banners.length, goBanner]);
 
     const { data: allVideosData, isLoading: loadingAll } = useGetPublicVideoMusics({ 
      search, ...(selectedGenre && { genre: selectedGenre }),
@@ -88,7 +102,8 @@ export default function VideoMusicPage() {
     playbackUrls: v.playbackUrls,
     videoUrl: v.videoUrl || v.originalVideoUrl || v.videoQualities?.[0]?.url || v.hlsUrl || "",
   });
-  const allVideos: VideoTrack[] = (allVideosData?.data || []).map(mapVideo);
+  const rawVideos = allVideosData?.data || [];
+  const allVideos: VideoTrack[] = useMemo(() => rawVideos.map(mapVideo), [rawVideos]);
   const artists: string[] = artistsData?.data || [];
   const albums: string[] = albumsData?.data || [];
   const genres = genresData?.data || [];
@@ -137,7 +152,11 @@ export default function VideoMusicPage() {
 
     const startPlayback = () => {
       if (!autoplay) return;
-      video.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+      video.play().then(() => setIsPlaying(true)).catch(() => {
+        video.muted = true;
+        setIsMuted(true);
+        video.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+      });
     };
 
     if (isHlsUrl(url) && Hls.isSupported()) {
@@ -179,34 +198,32 @@ export default function VideoMusicPage() {
     return true;
   }, [currentTrack, playbackUrlIndex, getPlaybackCandidates]);
 
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !currentTrack) return;
-    const onTime = () => setCurrentTime(video.currentTime);
-    const onMeta = () => setDuration(video.duration);
-    const onEnd = () => {
-      const expected = currentTrack.duration || duration;
-      const played = video.currentTime || currentTime;
-      // Stream ended too early (partial HLS) — try next URL before skipping track
-      if (expected > 30 && played < expected * 0.85) {
-        if (tryNextPlaybackUrl()) return;
-      }
-      handleNext();
-    };
-    const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
-    const onBuffer = () => { if (video.buffered.length > 0) setBuffered(video.buffered.end(video.buffered.length - 1)); };
-    video.addEventListener("timeupdate", onTime); video.addEventListener("loadedmetadata", onMeta);
-    video.addEventListener("ended", onEnd); video.addEventListener("play", onPlay);
-    video.addEventListener("pause", onPause); video.addEventListener("progress", onBuffer);
-    return () => { video.removeEventListener("timeupdate", onTime); video.removeEventListener("loadedmetadata", onMeta); video.removeEventListener("ended", onEnd); video.removeEventListener("play", onPlay); video.removeEventListener("pause", onPause); video.removeEventListener("progress", onBuffer); };
-  }, [currentTrack, handleNext, tryNextPlaybackUrl, duration, currentTime]);
+
   const handlePrev = () => { if (!currentTrack || queue.length === 0) return; const idx = queue.findIndex((t) => t.id === currentTrack.id); setCurrentTrack(idx > 0 ? queue[idx - 1] : queue[queue.length - 1]); };
   const togglePlay = () => { if (!videoRef.current) return; if (isPlaying) videoRef.current.pause(); else videoRef.current.play().catch(() => {}); };
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => { const t = Number(e.target.value); if (videoRef.current) videoRef.current.currentTime = t; setCurrentTime(t); };
   const handleVolume = (v: number) => { if (videoRef.current) { videoRef.current.volume = v; videoRef.current.muted = v === 0; } setVolume(v); setIsMuted(v === 0); };
   const toggleMute = () => { if (!videoRef.current) return; if (isMuted) { videoRef.current.muted = false; setIsMuted(false); if (volume === 0) handleVolume(1); } else { videoRef.current.muted = true; setIsMuted(true); } };
-  const toggleFullscreen = () => { if (!containerRef.current) return; if (!isFullscreen) { if (containerRef.current.requestFullscreen) containerRef.current.requestFullscreen(); } else { if (document.exitFullscreen) document.exitFullscreen(); } setIsFullscreen(!isFullscreen); };
+  const toggleFullscreen = async () => { 
+    if (!isFullscreen) { 
+      if (containerRef.current?.requestFullscreen) {
+        await containerRef.current.requestFullscreen();
+        try { if (screen.orientation && screen.orientation.lock) await screen.orientation.lock("landscape"); } catch (e) {}
+      } 
+      else if ((videoRef.current as any)?.webkitEnterFullscreen) {
+        (videoRef.current as any).webkitEnterFullscreen(); 
+      } 
+    } else { 
+      if (document.exitFullscreen) {
+        await document.exitFullscreen();
+        try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) {}
+      } 
+      else if ((videoRef.current as any)?.webkitExitFullscreen) {
+        (videoRef.current as any).webkitExitFullscreen(); 
+      } 
+    } 
+    setIsFullscreen(!isFullscreen); 
+  };
   const handleLike = async (track: VideoTrack) => { try { await likeMutation.mutateAsync(track.id); setLiked(prev => { const n = new Set(prev); if (n.has(track.id)) n.delete(track.id); else n.add(track.id); return n; }); } catch {} };
   const handleShare = async (track: VideoTrack) => { try { await shareMutation.mutateAsync(track.id); if (navigator.share) await navigator.share({ title: track.title, text: `Watch ${track.title}`, url: window.location.href }); else await navigator.clipboard.writeText(window.location.href); } catch {} };
    const handleDownload = (track: VideoTrack) => { downloadFile(getVideoUrl(track), `${track.title} - ${track.artist}.mp4`); };
@@ -271,67 +288,81 @@ export default function VideoMusicPage() {
       <PublicHeader activeTab="home" setActiveTab={() => {}} onSignIn={() => setLocation("/login")} onNavigate={(path) => setLocation(path)} />
       <div className="pt-16" />
 
+      {/* Dynamic Banner Carousel (Hero) */}
+      {viewMode === "home" && !currentTrack && banners.length > 0 && (
+        <div className="relative w-full overflow-hidden bg-[#030306] mt-[60px] lg:mt-[68px]" style={{ height: "70vh", minHeight: 480 }}>
+          {banners.map((banner, idx) => {
+            const isCurrent = idx === currentBannerIndex;
+            return (
+              <div key={banner.id} className={`absolute inset-0 transition-opacity duration-700 ${fadingBanner || !isCurrent ? 'opacity-0' : 'opacity-100 z-10'}`}>
+                {/* Backdrop */}
+                <div className="absolute inset-0">
+                  <img
+                    src={getImageUrl(banner.imageUrl)}
+                    alt={banner.title}
+                    className="w-full h-full object-cover object-center"
+                  />
+                </div>
+
+                {/* Gradients */}
+                <div className="absolute inset-0 bg-gradient-to-r from-[#030306] via-[#030306]/20 to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 h-[50%] bg-gradient-to-t from-[#030306] to-transparent" />
+                <div className="absolute top-0 left-0 right-0 h-[20%] bg-gradient-to-b from-[#030306]/30 to-transparent" />
+                <div className="absolute inset-0 bg-[#030306]/5" />
+
+                {/* Content */}
+                <div className="absolute bottom-14 sm:bottom-16 left-0 px-6 sm:px-10 lg:px-14 max-w-3xl w-full">
+                  <div className={`transition-all duration-700 ${fadingBanner || !isCurrent ? "translate-y-4" : "translate-y-0"}`}>
+                    <h1 className="text-4xl sm:text-5xl lg:text-7xl font-black text-white leading-tight mb-4 tracking-tight drop-shadow-2xl">{banner.title}</h1>
+                    {banner.subtitle && <p className="text-xl sm:text-2xl text-white/90 font-medium mb-3 drop-shadow-lg">{banner.subtitle}</p>}
+                    {banner.description && <p className="text-base sm:text-lg text-white/70 max-w-2xl mb-8 line-clamp-3 leading-relaxed drop-shadow-md">{banner.description}</p>}
+                    
+                    <button
+                      onClick={() => {
+                        if (banner.content) handlePlay(banner.content);
+                      }}
+                      className="px-8 py-3.5 bg-white text-black font-bold rounded-full hover:bg-zinc-200 transition-colors flex items-center gap-2"
+                    >
+                      <Play className="w-5 h-5 fill-current" /> {banner.ctaText || 'Watch Now'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          
+          {/* Banner indicators */}
+          {banners.length > 1 && (
+            <div className="absolute bottom-6 right-6 sm:right-10 flex gap-2 z-20">
+              {banners.map((_, idx) => (
+                <div key={idx} className={`w-2 h-2 rounded-full transition-all duration-300 ${idx === currentBannerIndex ? 'bg-white w-6' : 'bg-white/40'}`} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Fallback Hero */}
+      {viewMode === "home" && !currentTrack && banners.length === 0 && (
+        <div className="relative w-full overflow-hidden bg-[#030306] mt-[60px] lg:mt-[68px]" style={{ height: "50vh", minHeight: 320 }}>
+          <div className="absolute inset-0 bg-gradient-to-r from-violet-900 via-purple-900 to-fuchsia-900">
+            <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1200')] bg-cover bg-center opacity-20 mix-blend-overlay" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] to-transparent" />
+            <div className="relative z-10 px-8 py-16 sm:py-24 sm:px-12 flex flex-col justify-end h-full max-w-7xl mx-auto">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white mb-4 drop-shadow-xl">Music Videos</h1>
+              <p className="text-lg sm:text-xl text-white/70 max-w-xl mb-8">Watch devotional videos, bhajans, and spiritual music performances.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setViewMode("browse")} className="px-8 py-3 bg-white text-black font-bold rounded-full hover:scale-105 transition-transform flex items-center gap-2"><Play className="w-5 h-5 fill-current" /> Browse Videos</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-32">
         {/* Home View */}
         {viewMode === "home" && !currentTrack && (
           <>
-            {/* Dynamic Banner Carousel */}
-            {banners.length > 0 ? (
-              <div className="relative rounded-3xl overflow-hidden mb-10">
-                <div className="relative aspect-[21/9] sm:aspect-[3/1]">
-                  {banners.map((banner, idx) => (
-                    <div
-                      key={banner.id}
-                      className={`absolute inset-0 transition-opacity duration-500 ${idx === 0 ? 'opacity-100' : 'opacity-0'}`}
-                    >
-                      <img
-                        src={getImageUrl(banner.imageUrl)}
-                        alt={banner.title}
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
-                      <div className="absolute inset-0 flex items-center">
-                        <div className="px-8 py-12 sm:py-16 sm:px-12 max-w-2xl">
-                          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white mb-3">{banner.title}</h1>
-                          {banner.subtitle && <p className="text-lg sm:text-xl text-white/80 mb-2">{banner.subtitle}</p>}
-                          {banner.description && <p className="text-sm sm:text-base text-white/60 mb-6 line-clamp-2">{banner.description}</p>}
-                          <button
-                            onClick={() => {
-                              if (banner.content) {
-                                handlePlay(banner.content);
-                              }
-                            }}
-                            className="px-6 py-3 bg-white text-black font-semibold rounded-full hover:scale-105 transition-transform flex items-center gap-2"
-                          >
-                            <Play className="w-5 h-5" /> {banner.ctaText || 'Watch Now'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {/* Banner indicators */}
-                {banners.length > 1 && (
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-                    {banners.map((_, idx) => (
-                      <div key={idx} className={`w-2 h-2 rounded-full ${idx === 0 ? 'bg-white' : 'bg-white/40'}`} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              /* Hero (fallback) */
-              <div className="relative rounded-3xl overflow-hidden mb-10 bg-gradient-to-r from-violet-900 via-purple-900 to-fuchsia-900">
-                <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1200')] bg-cover bg-center opacity-20" />
-                <div className="relative z-10 px-8 py-12 sm:py-16 sm:px-12">
-                  <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white mb-4">Music Videos</h1>
-                  <p className="text-lg sm:text-xl text-white/70 max-w-xl mb-6">Watch devotional videos, bhajans, and spiritual music performances.</p>
-                  <div className="flex gap-3">
-                    <button onClick={() => setViewMode("browse")} className="px-6 py-3 bg-white text-black font-semibold rounded-full hover:scale-105 transition-transform flex items-center gap-2"><Play className="w-5 h-5" /> Browse Videos</button>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Quick Access - Artists */}
             {artists.length > 0 && (
@@ -387,7 +418,7 @@ export default function VideoMusicPage() {
                       </div>
                       <div className="p-4">
                         <p className="text-sm font-semibold text-white truncate">{video.title}</p>
-                        <p className="text-xs text-zinc-500 truncate">{video.artist} • {fmtViews(video.views || 0)} views</p>
+                        <p className="text-xs text-zinc-300 truncate">{video.artist} • {fmtViews(video.views || 0)} views</p>
                       </div>
                     </div>
                   ))}
@@ -397,11 +428,11 @@ export default function VideoMusicPage() {
 
             {/* All Videos */}
             <section>
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-2xl font-bold text-white flex items-center gap-2"><Video className="w-6 h-6 text-red-500" /> All Videos</h2>
-                <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2 flex-shrink-0"><Video className="w-6 h-6 text-red-500" /> All Videos</h2>
+                <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sm:pb-0 scrollbar-none">
                   {["all", "trending", "featured", "exclusive"].map((tab) => (
-                    <button key={tab} onClick={() => setActiveTab(tab as any)} className={`px-4 py-2 rounded-full text-sm font-medium transition ${activeTab === tab ? "bg-red-600 text-white" : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800"}`}>
+                    <button key={tab} onClick={() => setActiveTab(tab as any)} className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition flex-shrink-0 ${activeTab === tab ? "bg-red-600 text-white" : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800"}`}>
                       {tab.charAt(0).toUpperCase() + tab.slice(1)}
                     </button>
                   ))}
@@ -418,7 +449,7 @@ export default function VideoMusicPage() {
                     </div>
                     <div className="p-4">
                       <p className="text-sm font-semibold text-white truncate">{video.title}</p>
-                      <p className="text-xs text-zinc-500 truncate cursor-pointer hover:text-red-400" onClick={(e) => { e.stopPropagation(); handleViewArtist(video.artist); }}>{video.artist} • {fmtViews(video.views || 0)} views</p>
+                      <p className="text-xs text-zinc-300 truncate cursor-pointer hover:text-red-400" onClick={(e) => { e.stopPropagation(); handleViewArtist(video.artist); }}>{video.artist} • {fmtViews(video.views || 0)} views</p>
                     </div>
                   </div>
                 ))}
@@ -430,17 +461,17 @@ export default function VideoMusicPage() {
         {/* Browse View */}
         {(viewMode === "browse" || viewMode === "artist" || viewMode === "album") && !currentTrack && (
           <>
-            {viewMode !== "browse" && (<button onClick={handleBackToHome} className="flex items-center gap-2 text-zinc-400 hover:text-white mb-6 transition"><ArrowLeft className="w-5 h-5" /> Back</button>)}
+            <button onClick={handleBackToHome} className="flex items-center gap-2 text-zinc-400 hover:text-white mb-6 transition font-medium"><ArrowLeft className="w-5 h-5" /> Back</button>
             <div className="mb-8">
               <h1 className="text-3xl sm:text-4xl font-black text-white mb-2">
                 {viewMode === "artist" && `Videos by ${selectedFilter}`}
                 {viewMode === "album" && selectedFilter}
                 {viewMode === "browse" && "Browse Videos"}
               </h1>
-              <p className="text-zinc-500">{filteredVideos.length} videos</p>
+              <p className="text-zinc-400">{filteredVideos.length} videos</p>
             </div>
             <div className="relative max-w-xl mb-6">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
               <Input placeholder="Search videos..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-12 h-12 bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-600 focus:border-red-500 rounded-xl" />
             </div>
             <div className="flex flex-wrap gap-2 mb-6">
@@ -448,7 +479,7 @@ export default function VideoMusicPage() {
               <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:border-red-500 outline-none"><option value="">All Categories</option>{categories.map((c: any) => (<option key={c.id || c._id} value={c.id || c._id}>{c.name}</option>))}</select>
               <select value={selectedLanguage} onChange={(e) => setSelectedLanguage(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:border-red-500 outline-none"><option value="">All Languages</option>{languages.map((l: any) => (<option key={l.id || l._id} value={l.id || l._id}>{l.name}</option>))}</select>
             </div>
-            {isLoading ? (<div className="flex justify-center py-16"><div className="w-10 h-10 border-2 border-red-500 border-t-transparent rounded-full animate-spin" /></div>) : filteredVideos.length === 0 ? (<div className="text-center py-16"><Video className="w-16 h-16 mx-auto text-zinc-800 mb-4" /><h3 className="text-xl font-medium text-zinc-500">No videos found</h3></div>) : (
+            {isLoading ? (<div className="flex justify-center py-16"><div className="w-10 h-10 border-2 border-red-500 border-t-transparent rounded-full animate-spin" /></div>) : filteredVideos.length === 0 ? (<div className="text-center py-16"><Video className="w-16 h-16 mx-auto text-zinc-800 mb-4" /><h3 className="text-xl font-medium text-zinc-400">No videos found</h3></div>) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {filteredVideos.map((video) => (
                   <div key={video.id} className="group bg-zinc-900/50 rounded-xl overflow-hidden hover:bg-zinc-800/80 transition cursor-pointer" onClick={() => handlePlay(video)}>
@@ -459,7 +490,7 @@ export default function VideoMusicPage() {
                     </div>
                     <div className="p-4">
                       <p className="text-sm font-semibold text-white truncate">{video.title}</p>
-                      <p className="text-xs text-zinc-500 truncate cursor-pointer hover:text-red-400" onClick={(e) => { e.stopPropagation(); handleViewArtist(video.artist); }}>{video.artist} • {fmtViews(video.views || 0)} views</p>
+                      <p className="text-xs text-zinc-300 truncate cursor-pointer hover:text-red-400" onClick={(e) => { e.stopPropagation(); handleViewArtist(video.artist); }}>{video.artist} • {fmtViews(video.views || 0)} views</p>
                     </div>
                   </div>
                 ))}
@@ -472,39 +503,62 @@ export default function VideoMusicPage() {
         {currentTrack && (
           <div className="flex flex-col lg:flex-row gap-6">
             <div className="flex-1">
-              <div ref={containerRef} className="relative bg-black rounded-2xl overflow-hidden shadow-2xl">
-                <div className="aspect-video relative">
+              <button 
+                onClick={() => setCurrentTrack(null)} 
+                className="flex items-center gap-2 text-zinc-400 hover:text-white mb-4 transition font-medium"
+              >
+                <ArrowLeft className="w-5 h-5" /> Back to Videos
+              </button>
+              <div ref={containerRef} className={`bg-[#050505] flex flex-col w-full ${isFullscreen ? 'h-full justify-between' : 'rounded-2xl overflow-hidden shadow-2xl'}`}>
+                <div className={`relative w-full bg-black flex flex-col justify-center ${isFullscreen ? 'flex-1 min-h-0' : 'aspect-video'}`}>
                   <video
                     ref={videoRef}
                     className="w-full h-full object-contain bg-black"
                     playsInline
                     preload="metadata"
+                    muted={isMuted}
                     poster={currentTrack.thumbnail || currentTrack.coverImage ? getImageUrl(currentTrack.thumbnail || currentTrack.coverImage || "") : undefined}
                     onClick={togglePlay}
+                    onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                    onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+                    onPlay={() => setIsPlaying(true)}
+                    onPause={() => setIsPlaying(false)}
+                    onEnded={(e) => {
+                      const expected = currentTrack.duration || duration;
+                      const played = e.currentTarget.currentTime || currentTime;
+                      if (expected > 30 && played < expected * 0.85) {
+                        if (tryNextPlaybackUrl()) return;
+                      }
+                      handleNext();
+                    }}
+                    onProgress={(e) => {
+                      const v = e.currentTarget;
+                      if (v.buffered.length > 0) setBuffered(v.buffered.end(v.buffered.length - 1));
+                    }}
                   />
                   {!isPlaying && (
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none">
-                      <div className="w-20 h-20 rounded-full bg-red-600/90 flex items-center justify-center shadow-2xl">
-                        <Play className="w-10 h-10 text-white ml-1" />
+                    <div onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="absolute inset-0 bg-black/40 flex items-center justify-center cursor-pointer">
+                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-red-600/90 flex items-center justify-center shadow-2xl transition-transform hover:scale-105">
+                        <Play className="w-8 h-8 sm:w-10 sm:h-10 text-white ml-1" />
                       </div>
                     </div>
                   )}
-                  <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 to-transparent">
-                    <div className="mb-3"><div className="relative h-1 bg-white/30 rounded-full overflow-hidden cursor-pointer" onClick={(e) => { e.stopPropagation(); const rect = e.currentTarget.getBoundingClientRect(); const percent = (e.clientX - rect.left) / rect.width; handleSeek({ target: { value: String(percent * (duration || 100)) } } as any); }}><div className="absolute h-full bg-white/50 rounded-full" style={{ width: `${(buffered / (duration || 100)) * 100}%` }} /><div className="absolute h-full bg-red-500 rounded-full" style={{ width: `${(currentTime / (duration || 100)) * 100}%` }} /></div></div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <button onClick={(e) => { e.stopPropagation(); handlePrev(); }} className="text-white/80 hover:text-white"><SkipBack className="w-6 h-6" /></button>
-                        <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="w-10 h-10 rounded-full bg-red-600 hover:bg-red-500 flex items-center justify-center">{isPlaying ? <Pause className="w-5 h-5 text-white" /> : <Play className="w-5 h-5 text-white ml-0.5" />}</button>
-                        <button onClick={(e) => { e.stopPropagation(); handleNext(); }} className="text-white/80 hover:text-white"><SkipForward className="w-6 h-6" /></button>
-                        <span className="text-white/70 text-sm">{fmtTime(currentTime)} / {fmtTime(duration)}</span>
+                </div>
+                <div className="w-full px-4 pb-4 pt-3 bg-[#0a0a0a]">
+                  <div className="mb-3"><div className="relative h-1.5 bg-white/20 rounded-full overflow-hidden cursor-pointer group" onClick={(e) => { e.stopPropagation(); const rect = e.currentTarget.getBoundingClientRect(); const percent = (e.clientX - rect.left) / rect.width; handleSeek({ target: { value: String(percent * (duration || 100)) } } as any); }}><div className="absolute h-full bg-white/40 rounded-full" style={{ width: `${(buffered / (duration || 100)) * 100}%` }} /><div className="absolute h-full bg-red-500 rounded-full group-hover:bg-red-400 transition-colors" style={{ width: `${(currentTime / (duration || 100)) * 100}%` }} /></div></div>
+                  <div className="flex items-center justify-between flex-wrap gap-y-2">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <button onClick={(e) => { e.stopPropagation(); handlePrev(); }} className="text-white/80 hover:text-white"><SkipBack className="w-5 h-5 sm:w-6 sm:h-6" /></button>
+                      <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-red-600 hover:bg-red-500 flex items-center justify-center">{isPlaying ? <Pause className="w-4 h-4 sm:w-5 sm:h-5 text-white" /> : <Play className="w-4 h-4 sm:w-5 sm:h-5 text-white ml-0.5" />}</button>
+                      <button onClick={(e) => { e.stopPropagation(); handleNext(); }} className="text-white/80 hover:text-white"><SkipForward className="w-5 h-5 sm:w-6 sm:h-6" /></button>
+                      <span className="text-white/70 text-xs sm:text-sm">{fmtTime(currentTime)} / {fmtTime(duration)}</span>
+                    </div>
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <div className="flex items-center gap-2">
+                        <button onClick={(e) => { e.stopPropagation(); toggleMute(); }} className="text-white/80 hover:text-white">{isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}</button>
+                        <input type="range" min="0" max="1" step="0.05" value={isMuted ? 0 : volume} onChange={(e) => { e.stopPropagation(); handleVolume(Number(e.target.value)); }} className="hidden sm:block w-16 sm:w-20 h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-red-500" />
                       </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2">
-                          <button onClick={(e) => { e.stopPropagation(); toggleMute(); }} className="text-white/80 hover:text-white">{isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}</button>
-                          <input type="range" min="0" max="1" step="0.05" value={isMuted ? 0 : volume} onChange={(e) => { e.stopPropagation(); handleVolume(Number(e.target.value)); }} className="w-20 h-1 bg-white/30 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-red-500" />
-                        </div>
-                        <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="text-white/80 hover:text-white">{isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}</button>
-                      </div>
+                      <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="text-white/80 hover:text-white">{isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}</button>
                     </div>
                   </div>
                 </div>
@@ -512,25 +566,25 @@ export default function VideoMusicPage() {
 
               <div className="mt-4">
                 <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">{currentTrack.title}</h1>
-                <div className="flex items-center gap-4 text-sm text-zinc-500 mb-4">
+                <div className="flex items-center gap-4 text-sm text-zinc-400 mb-4">
                   <span>{fmtViews(currentTrack.views || 0)} views</span>
-                  <span className="cursor-pointer hover:text-red-400" onClick={() => handleViewArtist(currentTrack.artist)}>{currentTrack.artist}</span>
-                  {currentTrack.album && <span className="cursor-pointer hover:text-red-400" onClick={() => handleViewAlbum(currentTrack.album!)}>• {currentTrack.album}</span>}
+                  <span className="cursor-pointer hover:text-red-300 text-white/90" onClick={() => handleViewArtist(currentTrack.artist)}>{currentTrack.artist}</span>
+                  {currentTrack.album && <span className="cursor-pointer hover:text-red-300" onClick={() => handleViewAlbum(currentTrack.album!)}>• {currentTrack.album}</span>}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap mb-4">
-                  <button onClick={() => handleLike(currentTrack)} className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${liked.has(currentTrack.id) ? "bg-red-500/20 text-red-500" : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"}`}><Heart className={`w-5 h-5 ${liked.has(currentTrack.id) ? "fill-current" : ""}`} /><span className="text-sm">{liked.has(currentTrack.id) ? "Liked" : "Like"}</span></button>
-                  <button onClick={() => handleShare(currentTrack)} className="flex items-center gap-2 px-4 py-2 bg-zinc-900 rounded-full text-zinc-300 hover:bg-zinc-800 transition-colors"><Share2 className="w-5 h-5" /><span className="text-sm">Share</span></button>
-                  <button onClick={() => handleDownload(currentTrack)} className="flex items-center gap-2 px-4 py-2 bg-zinc-900 rounded-full text-zinc-300 hover:bg-zinc-800 transition-colors"><Download className="w-5 h-5" /><span className="text-sm">Download</span></button>
-                  <button onClick={() => handleSave(currentTrack)} className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${saved.has(currentTrack.id) ? "bg-green-500/20 text-green-500" : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"}`}>{saved.has(currentTrack.id) ? <Check className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}<span className="text-sm">{saved.has(currentTrack.id) ? "Saved" : "Save"}</span></button>
+                  <button onClick={() => handleLike(currentTrack)} className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${liked.has(currentTrack.id) ? "bg-red-500/20 text-red-500" : "bg-zinc-800/80 text-zinc-200 hover:bg-zinc-700"}`}><Heart className={`w-5 h-5 ${liked.has(currentTrack.id) ? "fill-current" : ""}`} /><span className="text-sm">{liked.has(currentTrack.id) ? "Liked" : "Like"}</span></button>
+                  <button onClick={() => handleShare(currentTrack)} className="flex items-center gap-2 px-4 py-2 bg-zinc-800/80 rounded-full text-zinc-200 hover:bg-zinc-700 transition-colors"><Share2 className="w-5 h-5" /><span className="text-sm">Share</span></button>
+                  <button onClick={() => handleDownload(currentTrack)} className="flex items-center gap-2 px-4 py-2 bg-zinc-800/80 rounded-full text-zinc-200 hover:bg-zinc-700 transition-colors"><Download className="w-5 h-5" /><span className="text-sm">Download</span></button>
+                  <button onClick={() => handleSave(currentTrack)} className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${saved.has(currentTrack.id) ? "bg-green-500/20 text-green-500" : "bg-zinc-800/80 text-zinc-200 hover:bg-zinc-700"}`}>{saved.has(currentTrack.id) ? <Check className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}<span className="text-sm">{saved.has(currentTrack.id) ? "Saved" : "Save"}</span></button>
                 </div>
-                <div className="bg-zinc-900 rounded-xl p-4"><p className="text-white font-medium mb-2">{currentTrack.artist}</p>{currentTrack.description && <p className="text-zinc-400 text-sm">{currentTrack.description}</p>}</div>
+                <div className="bg-zinc-900/80 rounded-xl p-4"><p className="text-white font-medium mb-2">{currentTrack.artist}</p>{currentTrack.description && <p className="text-zinc-300 text-sm">{currentTrack.description}</p>}</div>
               </div>
             </div>
 
             <div className="lg:w-80 flex-shrink-0">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-white">Queue</h3>
-                <span className="text-sm text-zinc-500">{queue.length} videos</span>
+                <span className="text-sm text-zinc-400">{queue.length} videos</span>
               </div>
               <div className="space-y-2 max-h-[500px] overflow-y-auto">
                 {queue.map((video, index) => (
@@ -548,24 +602,24 @@ export default function VideoMusicPage() {
                     }`}
                     onClick={() => setCurrentTrack(video)}
                   >
-                    <div className="flex items-center text-zinc-500">
+                    <div className="flex items-center text-zinc-400">
                       <GripVertical className="w-4 h-4" />
                     </div>
-                    <div className="relative w-24 flex-shrink-0 aspect-video rounded-lg overflow-hidden bg-zinc-900">
-                      {video.thumbnail || video.coverImage ? <img src={getImageUrl(video.thumbnail || video.coverImage || "")} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Film className="w-6 h-6 text-zinc-600" /></div>}
+                    <div className="relative w-24 flex-shrink-0 aspect-video rounded-lg overflow-hidden bg-zinc-800">
+                      {video.thumbnail || video.coverImage ? <img src={getImageUrl(video.thumbnail || video.coverImage || "")} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Film className="w-6 h-6 text-zinc-400" /></div>}
                       {video.duration && <span className="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] px-1 py-0.5 rounded">{fmtTime(video.duration)}</span>}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium truncate ${currentTrack?.id === video.id ? "text-red-400" : "text-white"}`}>{video.title}</p>
-                      <p className="text-xs text-zinc-500 truncate">{video.artist}</p>
+                      <p className={`text-sm font-medium truncate ${currentTrack?.id === video.id ? "text-red-300 font-bold" : "text-zinc-100"}`}>{video.title}</p>
+                      <p className="text-xs text-zinc-300 truncate">{video.artist}</p>
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); handleRemoveFromQueue(index); }} className="p-1 text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition">
+                    <button onClick={(e) => { e.stopPropagation(); handleRemoveFromQueue(index); }} className="p-1 text-zinc-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition">
                       <XCircle className="w-4 h-4" />
                     </button>
                   </div>
                 ))}
                 {queue.length === 0 && (
-                  <div className="text-center py-8 text-zinc-500">
+                  <div className="text-center py-8 text-zinc-400">
                     <ListMusic className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p>Queue is empty</p>
                   </div>

@@ -18,6 +18,8 @@ import {
   Upload,
   Link2,
   Image as ImageIcon2,
+  Music,
+  PlaySquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +45,8 @@ import {
   useAppendBannerShowVideo,
   useGetContentList,
   useGetMovies,
+  useGetPublicAudios,
+  useGetPublicVideoMusics,
   getImageUrl,
 } from "../lib/api-client";
 import MediaPicker from "@/components/MediaPicker";
@@ -50,7 +54,7 @@ import MediaPicker from "@/components/MediaPicker";
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
 /* ------------------------------------------------------------------ */
-type ContentType = "movie" | "tvshow" | "drama";
+type ContentType = "movie" | "tvshow" | "drama" | "audio" | "video";
 
 type ContentItem = {
   id: string;
@@ -81,7 +85,7 @@ const CONTENT_TYPES: {
   icon: React.ReactNode;
   description: string;
   color: string;
-  apiSource: "movie" | "content";
+  apiSource: "movie" | "content" | "audio" | "video-music";
   apiType?: string;
 }[] = [
   {
@@ -109,6 +113,22 @@ const CONTENT_TYPES: {
     color: "from-rose-500/20 to-pink-600/10 border-rose-500/40",
     apiSource: "content",
     apiType: "drama",
+  },
+  {
+    key: "audio",
+    label: "Audio Track",
+    icon: <Music className="w-7 h-7" />,
+    description: "Music tracks and devotional audio",
+    color: "from-amber-500/20 to-orange-600/10 border-amber-500/40",
+    apiSource: "audio",
+  },
+  {
+    key: "video",
+    label: "Music Video",
+    icon: <PlaySquare className="w-7 h-7" />,
+    description: "Music videos and performances",
+    color: "from-green-500/20 to-emerald-600/10 border-green-500/40",
+    apiSource: "video-music",
   },
 ];
 
@@ -188,6 +208,12 @@ export default function BannerForm() {
       ? { search: searchQuery, limit: 50, contentType: cfg?.apiType }
       : undefined
   );
+  const audiosQuery = useGetPublicAudios(
+    cfg?.apiSource === "audio" ? { search: searchQuery, limit: "50" } : undefined
+  );
+  const videosQuery = useGetPublicVideoMusics(
+    cfg?.apiSource === "video-music" ? { search: searchQuery, limit: "50" } : undefined
+  );
 
   const contentItems: ContentItem[] = (() => {
     if (!contentType) return [];
@@ -201,6 +227,30 @@ export default function BannerForm() {
         status: m.status,
         year: m.year,
         duration: m.duration,
+      }));
+    }
+    if (cfg?.apiSource === "audio") {
+      return (audiosQuery.data?.data || []).map((a: any) => ({
+        id: a._id || a.id,
+        title: a.title,
+        thumbnail: a.thumbnail || a.coverImage,
+        description: a.description || "",
+        shortDescription: a.artist || "",
+        status: a.status,
+        year: a.releaseYear,
+        duration: a.duration,
+      }));
+    }
+    if (cfg?.apiSource === "video-music") {
+      return (videosQuery.data?.data || []).map((v: any) => ({
+        id: v._id || v.id,
+        title: v.title,
+        thumbnail: v.thumbnail || v.coverImage,
+        description: v.description || "",
+        shortDescription: v.artist || "",
+        status: v.status,
+        year: v.releaseYear,
+        duration: v.duration,
       }));
     }
     return (contentQuery.data?.data || []).map((c: any) => ({

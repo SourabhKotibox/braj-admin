@@ -178,10 +178,10 @@ function MusicRail({
         {items.map((item: any) => {
           const isAudio = kind === "audio";
           return (
-            <button
+            <div
               key={item.id || item._id}
               onClick={() => setLocation(isAudio ? "/music" : "/videos")}
-              className={`group flex-shrink-0 ${isAudio ? "w-[150px] sm:w-[180px] md:w-[200px]" : "w-[240px] sm:w-[280px] md:w-[320px]"} text-left`}
+              className={`group flex-shrink-0 ${isAudio ? "w-[150px] sm:w-[180px] md:w-[200px]" : "w-[240px] sm:w-[280px] md:w-[320px]"} text-left cursor-pointer`}
             >
               <div
                 className={`relative overflow-hidden bg-zinc-900 ${isAudio ? "aspect-square rounded-xl" : "aspect-video rounded-xl"} group-hover:ring-2 group-hover:ring-red-500/40 transition-all duration-300`}
@@ -221,7 +221,7 @@ function MusicRail({
                   <Play className="w-4 h-4 text-foreground fill-white ml-0.5" />
                 </button>
               </div>
-            </button>
+            </div>
           );
         })}
       </div>
@@ -498,7 +498,10 @@ function Hero({ activeTab, onPlay, onSubscribeClick, isSubscribed }: { activeTab
   }
   if (!heroContent.length) return null;
 
-  const item = heroContent[current];
+  const safeCurrent = current < heroContent.length ? current : 0;
+  const item = heroContent[safeCurrent];
+  if (!item) return null;
+
   const isPremium = item.isPremium || item.badge === "TOP" || item.badge === "EXCLUSIVE";
 
   return (
@@ -590,20 +593,20 @@ function Hero({ activeTab, onPlay, onSubscribeClick, isSubscribed }: { activeTab
           <button
             key={i}
             onClick={() => go(i)}
-            className={`transition-all duration-300 rounded-full ${i === current ? "w-8 h-[5px] bg-red-600" : "w-2 h-2 bg-white/30 hover:bg-white/60"}`}
+            className={`transition-all duration-300 rounded-full ${i === safeCurrent ? "w-8 h-[5px] bg-red-600" : "w-2 h-2 bg-white/30 hover:bg-white/60"}`}
           />
         ))}
       </div>
 
       {/* Arrow controls */}
       <button
-        onClick={() => go((current - 1 + heroContent.length) % heroContent.length)}
+        onClick={() => go((safeCurrent - 1 + heroContent.length) % heroContent.length)}
         className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/80 text-white border border-zinc-800 hover:border-zinc-600 transition-all"
       >
         <ChevronLeft className="w-5 h-5" />
       </button>
       <button
-        onClick={() => go((current + 1) % heroContent.length)}
+        onClick={() => go((safeCurrent + 1) % heroContent.length)}
         className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/80 text-white border border-zinc-800 hover:border-zinc-600 transition-all"
       >
         <ChevronRight className="w-5 h-5" />
@@ -872,7 +875,8 @@ function NewHotTab({ onPlay }: { onPlay: (item: ContentItem) => void }) {
 /* ─── SHORT DRAMA TAB ─── */
 function ShortDramaTab({ onSelect }: { onSelect: (d: ShortDrama) => void }) {
   const { data: homeData, isLoading } = useGetWebHome();
-  const allDramas = [...(homeData?.featuredDramas || []), ...(homeData?.newDramas || [])];
+  const allDramasRaw = [...(homeData?.featuredDramas || []), ...(homeData?.newDramas || [])];
+  const allDramas = Array.from(new Map(allDramasRaw.map((d: any) => [d.id || d._id, d])).values());
 
   if (isLoading) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-red-600" /></div>;
 
@@ -1651,7 +1655,7 @@ export function PublicHeader({ activeTab, setActiveTab, onSignIn, onSignOut, use
                     <ChevronDown className={`w-3 h-3 transition-transform ${musicDropdownOpen ? "rotate-180" : ""}`} />
                   </button>
                   {musicDropdownOpen && (
-                    <div className="absolute top-full left-0 mt-2 w-56 bg-[#0a0a0a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
+                    <div className="absolute top-full left-0 mt-2 w-48 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl z-50 p-1.5 flex flex-col gap-0.5">
                       {MUSIC_DROPDOWN.map((item) => (
                         <button
                           key={item.href}
@@ -1659,15 +1663,12 @@ export function PublicHeader({ activeTab, setActiveTab, onSignIn, onSignOut, use
                             setLocation(item.href);
                             setMusicDropdownOpen(false);
                           }}
-                          className="flex items-center gap-3 w-full px-4 py-3 text-left hover:bg-white/5 transition-colors"
+                          className="group flex items-center gap-3 w-full px-3 py-2.5 text-left hover:bg-white/10 rounded-lg transition-colors"
                         >
-                          <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary">
+                          <div className="text-zinc-400 group-hover:text-white transition-colors">
                             {item.icon}
                           </div>
-                          <div>
-                            <p className="text-white text-sm font-medium">{item.label}</p>
-                            <p className="text-white/50 text-xs">{item.description}</p>
-                          </div>
+                          <span className="text-white text-sm font-medium">{item.label}</span>
                         </button>
                       ))}
                     </div>
@@ -1800,8 +1801,8 @@ export function PublicHeader({ activeTab, setActiveTab, onSignIn, onSignOut, use
           </div>
         </div>
 
-        <div className={`lg:hidden overflow-hidden transition-all duration-300 ${mobileOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"}`}>
-          <div className="bg-[#0a0a10] border-t border-zinc-800 px-4 py-4 space-y-2">
+        <div className={`lg:hidden overflow-hidden transition-all duration-300 ${mobileOpen ? "max-h-screen opacity-100" : "max-h-0 opacity-0"}`}>
+          <div className="bg-[#0a0a10] border-t border-zinc-800 px-4 py-4 space-y-2 max-h-[calc(100vh-60px)] overflow-y-auto">
             {NAV_TABS.map(({ label, tab, icon }) => (
               <button
                 key={tab}
@@ -1813,22 +1814,17 @@ export function PublicHeader({ activeTab, setActiveTab, onSignIn, onSignOut, use
                 {label}
               </button>
             ))}
-            {/* Music Dropdown for Mobile */}
+            {/* Music & Videos Dropdown for Mobile */}
             <div className="pt-2 border-t border-white/5">
-              <p className="px-3.5 py-2 text-xs font-bold text-white/50 uppercase tracking-wider">Music</p>
+              <p className="px-3.5 py-2 text-xs font-bold text-white/50 uppercase tracking-wider">Music & Videos</p>
               {MUSIC_DROPDOWN.map((item) => (
                 <button
                   key={item.href}
                   onClick={() => { setLocation(item.href); setMobileOpen(false); }}
                   className="w-full flex items-center gap-3 px-3.5 py-3 rounded-full text-sm font-bold transition-all text-white hover:bg-white/10"
                 >
-                  <span className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary">
-                    {item.icon}
-                  </span>
-                  <div className="text-left">
-                    <p className="text-sm">{item.label}</p>
-                    <p className="text-xs text-white/50">{item.description}</p>
-                  </div>
+                  {item.icon}
+                  {item.label}
                 </button>
               ))}
             </div>
