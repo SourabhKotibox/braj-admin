@@ -1,17 +1,18 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Plus, Search, Video, Edit, Trash2, Star, TrendingUp } from "lucide-react";
+import { Plus, Search, Video, Edit, Trash2, Star, TrendingUp, Play, X, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { useGetAllVideoMusics, useDeleteVideoMusic, useToggleVideoMusicFeatured, useToggleVideoMusicTrending } from "@/lib/api-client";
+import { useGetAllVideoMusics, useDeleteVideoMusic, useToggleVideoMusicFeatured, useToggleVideoMusicTrending, getImageUrl } from "@/lib/api-client";
 
 export default function VideoMusicListPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
+  const [previewVideo, setPreviewVideo] = useState<any>(null);
   const { data, isLoading } = useGetAllVideoMusics({ search });
   const deleteMutation = useDeleteVideoMusic();
   const featuredMutation = useToggleVideoMusicFeatured();
@@ -119,6 +120,9 @@ export default function VideoMusicListPage() {
                   </td>
                   <td className="p-4">
                     <div className="flex items-center justify-end gap-2">
+                      <Button variant="ghost" size="icon" onClick={() => setPreviewVideo(video)} title="Play Video & Test Audio" className="text-green-500 hover:text-green-400 hover:bg-green-500/10">
+                        <Play className="w-4 h-4 fill-current" />
+                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => setLocation(`/video-music/${video.id}`)}>
                         <Edit className="w-4 h-4" />
                       </Button>
@@ -131,6 +135,48 @@ export default function VideoMusicListPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Video Preview Modal */}
+      {previewVideo && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden w-full max-w-3xl shadow-2xl">
+            <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-white text-base flex items-center gap-2">
+                  <Volume2 className="w-4 h-4 text-green-400" />
+                  {previewVideo.title}
+                </h3>
+                <p className="text-xs text-zinc-400">{previewVideo.artist || "Music Video"} • Audio Test Preview</p>
+              </div>
+              <button
+                onClick={() => setPreviewVideo(null)}
+                className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 bg-black">
+              <video
+                src={getImageUrl(previewVideo.videoUrl || previewVideo.videoQualities?.[0]?.url || "")}
+                controls
+                autoPlay
+                playsInline
+                className="w-full aspect-video rounded-xl bg-black object-contain"
+                onLoadedMetadata={(e) => {
+                  e.currentTarget.volume = 1;
+                  e.currentTarget.muted = false;
+                }}
+              />
+            </div>
+            <div className="p-4 border-t border-zinc-800 flex items-center justify-between text-xs text-zinc-400">
+              <span className="truncate max-w-md">Source: {previewVideo.videoUrl || "No URL"}</span>
+              <Button variant="outline" size="sm" onClick={() => setPreviewVideo(null)}>
+                Close Preview
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

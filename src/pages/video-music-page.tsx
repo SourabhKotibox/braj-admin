@@ -152,7 +152,15 @@ export default function VideoMusicPage() {
 
     const startPlayback = () => {
       if (!autoplay) return;
-      video.play().then(() => setIsPlaying(true)).catch(() => {
+      const targetVolume = volume > 0 ? volume : 1;
+      video.volume = targetVolume;
+      video.muted = false;
+
+      video.play().then(() => {
+        setIsPlaying(true);
+        setIsMuted(false);
+      }).catch(() => {
+        // Autoplay with sound was blocked by browser policy
         video.muted = true;
         setIsMuted(true);
         video.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
@@ -170,7 +178,7 @@ export default function VideoMusicPage() {
       video.load();
       startPlayback();
     }
-  }, []);
+  }, [volume]);
 
   useEffect(() => {
     if (!currentTrack || !videoRef.current) return;
@@ -187,7 +195,14 @@ export default function VideoMusicPage() {
   }, [currentTrack, playbackUrlIndex, getVideoUrl, loadVideoSource]);
 
   const filteredVideosForDisplay = allVideos.filter((v) => { if (activeTab === "trending") return v.trending; if (activeTab === "featured") return v.featured; if (activeTab === "exclusive") return v.isExclusive; return true; });
-  const handlePlay = (track: VideoTrack, trackList?: VideoTrack[]) => { setCurrentTrack(track); setPlaybackUrlIndex(0); const list = trackList || filteredVideosForDisplay; const idx = list.findIndex((v) => v.id === track.id); setQueue(list.slice(idx)); };
+  const handlePlay = (track: VideoTrack, trackList?: VideoTrack[]) => {
+    setCurrentTrack(track);
+    setPlaybackUrlIndex(0);
+    setIsMuted(false);
+    const list = trackList || filteredVideosForDisplay;
+    const idx = list.findIndex((v) => v.id === track.id);
+    setQueue(list.slice(idx));
+  };
   const handleNext = useCallback(() => { if (!currentTrack || queue.length === 0) return; const idx = queue.findIndex((t) => t.id === currentTrack.id); setCurrentTrack(idx < queue.length - 1 ? queue[idx + 1] : queue[0]); }, [currentTrack, queue]);
 
   const tryNextPlaybackUrl = useCallback(() => {
@@ -200,10 +215,46 @@ export default function VideoMusicPage() {
 
 
   const handlePrev = () => { if (!currentTrack || queue.length === 0) return; const idx = queue.findIndex((t) => t.id === currentTrack.id); setCurrentTrack(idx > 0 ? queue[idx - 1] : queue[queue.length - 1]); };
-  const togglePlay = () => { if (!videoRef.current) return; if (isPlaying) videoRef.current.pause(); else videoRef.current.play().catch(() => {}); };
+  const togglePlay = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (isPlaying) {
+      video.pause();
+    } else {
+      // User explicitly clicked Play: unmute and play with sound
+      video.muted = false;
+      setIsMuted(false);
+      const targetVol = volume > 0 ? volume : 1;
+      video.volume = targetVol;
+      setVolume(targetVol);
+      video.play().catch((err) => {
+        console.warn("Video play error:", err);
+      });
+    }
+  };
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => { const t = Number(e.target.value); if (videoRef.current) videoRef.current.currentTime = t; setCurrentTime(t); };
-  const handleVolume = (v: number) => { if (videoRef.current) { videoRef.current.volume = v; videoRef.current.muted = v === 0; } setVolume(v); setIsMuted(v === 0); };
-  const toggleMute = () => { if (!videoRef.current) return; if (isMuted) { videoRef.current.muted = false; setIsMuted(false); if (volume === 0) handleVolume(1); } else { videoRef.current.muted = true; setIsMuted(true); } };
+  const handleVolume = (v: number) => {
+    if (videoRef.current) {
+      videoRef.current.volume = v;
+      videoRef.current.muted = v === 0;
+    }
+    setVolume(v);
+    setIsMuted(v === 0);
+  };
+  const toggleMute = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (isMuted || video.muted) {
+      video.muted = false;
+      setIsMuted(false);
+      const targetVol = volume > 0 ? volume : 1;
+      video.volume = targetVol;
+      setVolume(targetVol);
+    } else {
+      video.muted = true;
+      setIsMuted(true);
+    }
+  };
   const toggleFullscreen = async () => { 
     if (!isFullscreen) { 
       if (containerRef.current?.requestFullscreen) {
@@ -515,12 +566,17 @@ export default function VideoMusicPage() {
                     ref={videoRef}
                     className="w-full h-full object-contain bg-black"
                     playsInline
-                    preload="metadata"
+                    preload="auto"
                     muted={isMuted}
                     poster={currentTrack.thumbnail || currentTrack.coverImage ? getImageUrl(currentTrack.thumbnail || currentTrack.coverImage || "") : undefined}
                     onClick={togglePlay}
                     onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-                    onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+                    onLoadedMetadata={(e) => {
+                      setDuration(e.currentTarget.duration);
+                      const targetVol = volume > 0 ? volume : 1;
+                      e.currentTarget.volume = targetVol;
+                      if (!isMuted) e.currentTarget.muted = false;
+                    }}
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
                     onEnded={(e) => {
@@ -536,6 +592,19 @@ export default function VideoMusicPage() {
                       if (v.buffered.length > 0) setBuffered(v.buffered.end(v.buffered.length - 1));
                     }}
                   />
+                  {isMuted && isPlaying && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleMute();
+                      }}
+                      className="absolute top-4 left-4 z-30 flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-bold px-3.5 py-2 rounded-full backdrop-blur-md shadow-2xl transition-all animate-pulse"
+                      title="Click to unmute"
+                    >
+                      <VolumeX className="w-4 h-4" />
+                      <span>Click to Unmute Sound</span>
+                    </button>
+                  )}
                   {!isPlaying && (
                     <div onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="absolute inset-0 bg-black/40 flex items-center justify-center cursor-pointer">
                       <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-red-600/90 flex items-center justify-center shadow-2xl transition-transform hover:scale-105">

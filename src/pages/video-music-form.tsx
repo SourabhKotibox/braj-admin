@@ -264,6 +264,21 @@ export default function VideoMusicFormPage() {
               </Button>
             </div>
             {videoFilePath && <p className="text-xs text-muted-foreground">Selected: {videoFilePath}</p>}
+            {(videoUrl || videoFilePath) && (
+              <div className="mt-3 p-3 bg-black/60 rounded-xl border border-border">
+                <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center justify-between">
+                  <span>Video Preview (Test Sound & Playback)</span>
+                  <span className="text-[10px] text-green-400">Full audio enabled</span>
+                </p>
+                <video
+                  src={getImageUrl(videoUrl || videoFilePath)}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="w-full max-h-64 rounded-lg bg-black object-contain"
+                />
+              </div>
+            )}
           </div>
           <div className="space-y-2">
             <Label>HLS URL</Label>

@@ -56,7 +56,10 @@ export default function VideoMusicPlayer({ src, title, artist, poster, onLike, o
     if (!video) return;
 
     const updateTime = () => setCurrentTime(video.currentTime);
-    const updateDuration = () => setDuration(video.duration);
+    const updateDuration = () => {
+      setDuration(video.duration);
+      video.volume = volume > 0 ? volume : 1;
+    };
     const handleEnded = () => setIsPlaying(false);
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
@@ -74,7 +77,7 @@ export default function VideoMusicPlayer({ src, title, artist, poster, onLike, o
       video.removeEventListener("play", handlePlay);
       video.removeEventListener("pause", handlePause);
     };
-  }, []);
+  }, [volume]);
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current;
@@ -83,9 +86,13 @@ export default function VideoMusicPlayer({ src, title, artist, poster, onLike, o
     if (isPlaying) {
       video.pause();
     } else {
-      video.play();
+      video.muted = false;
+      const targetVol = volume > 0 ? volume : 1;
+      video.volume = targetVol;
+      setIsMuted(false);
+      video.play().catch(() => {});
     }
-  }, [isPlaying]);
+  }, [isPlaying, volume]);
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const video = videoRef.current;
@@ -100,6 +107,7 @@ export default function VideoMusicPlayer({ src, title, artist, poster, onLike, o
     if (!video) return;
     const vol = Number(e.target.value);
     video.volume = vol;
+    video.muted = vol === 0;
     setVolume(vol);
     setIsMuted(vol === 0);
   };
@@ -107,8 +115,16 @@ export default function VideoMusicPlayer({ src, title, artist, poster, onLike, o
   const toggleMute = () => {
     const video = videoRef.current;
     if (!video) return;
-    video.muted = !isMuted;
-    setIsMuted(!isMuted);
+    if (isMuted || video.muted) {
+      video.muted = false;
+      const targetVol = volume > 0 ? volume : 1;
+      video.volume = targetVol;
+      setVolume(targetVol);
+      setIsMuted(false);
+    } else {
+      video.muted = true;
+      setIsMuted(true);
+    }
   };
 
   const toggleFullscreen = () => {
