@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-let baseUrl = import.meta.env.VITE_API_URL || "https://brajcinema.tv";
+let baseUrl = import.meta.env.VITE_API_URL || "https://brajcinematv.com";
 let getAuthToken = () => localStorage.getItem("appAccessToken");
 
 export const getActiveProfileId = (): string | null => {

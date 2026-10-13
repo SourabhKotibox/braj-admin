@@ -7,7 +7,7 @@ import {
   setBaseUrl,
 } from "./lib/api-client";
 
-setBaseUrl(import.meta.env.VITE_API_URL || "https://brajcinema.tv");
+setBaseUrl(import.meta.env.VITE_API_URL || "https://brajcinematv.com");
 
 setAuthTokenGetter(() =>
   localStorage.getItem("appAccessToken")
