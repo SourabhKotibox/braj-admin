@@ -53,6 +53,19 @@ export default function MediaPicker({ open, onClose, onSelect, source, accept = 
     const url = URL.createObjectURL(file);
     setPreview(url);
     setSelectedMedia({ name: file.name, file, isLocal: true });
+
+    // Instantly probe duration in browser for video or audio files
+    if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
+      const mediaEl = document.createElement(file.type.startsWith("video/") ? "video" : "audio");
+      mediaEl.preload = "metadata";
+      mediaEl.src = url;
+      mediaEl.onloadedmetadata = () => {
+        const dur = Math.round(mediaEl.duration);
+        if (Number.isFinite(dur) && dur > 0) {
+          setSelectedMedia((prev: any) => ({ ...prev, duration: dur }));
+        }
+      };
+    }
   };
 
   const handleConfirm = async () => {
@@ -61,6 +74,7 @@ export default function MediaPicker({ open, onClose, onSelect, source, accept = 
       const storagePath = toStorageMediaPath(raw) || raw;
       onSelect({
         ...selectedMedia,
+        duration: selectedMedia.duration || 0,
         url: getImageUrl(storagePath),
         filePath: storagePath,
         hlsMasterPlaylistUrl: selectedMedia.hlsMasterPlaylistUrl
@@ -93,6 +107,7 @@ export default function MediaPicker({ open, onClose, onSelect, source, accept = 
           const storagePath = toStorageMediaPath(raw) || raw;
           onSelect({
             ...uploadedFile,
+            duration: uploadedFile.duration || selectedMedia.duration || 0,
             url: getImageUrl(storagePath),
             filePath: storagePath,
             hlsMasterPlaylistUrl: uploadedFile.hlsMasterPlaylistUrl
@@ -100,7 +115,7 @@ export default function MediaPicker({ open, onClose, onSelect, source, accept = 
               : uploadedFile.hlsMasterPlaylistUrl,
           });
         } else {
-          onSelect({ url: preview || "", filePath: "", name: selectedMedia.name });
+          onSelect({ url: preview || "", filePath: "", name: selectedMedia.name, duration: selectedMedia.duration || 0 });
         }
         handleClose();
       } catch (error: any) {
